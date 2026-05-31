@@ -1,0 +1,10 @@
+# Files NOT to send to Fly.io's build context
+node_modules
+dist
+.env
+.env.local
+*.log
+.DS_Store
+coverage
+__tests__
+src/__tests__

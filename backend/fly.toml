@@ -1,0 +1,36 @@
+# Fly.io config for the mondo_2026 backend.
+# Run `fly launch --no-deploy` once to create the app, then `fly deploy`.
+# Set secrets first:
+#   fly secrets set DATABASE_URL=... JWT_SECRET=... FRONTEND_URL=https://your-app.vercel.app
+
+app = "mondo-2026"             # rename to whatever you choose at `fly launch`
+primary_region = "fra"          # closest free region; pick one near you (lhr/fra/iad/sjc...)
+
+[build]
+
+[env]
+  NODE_ENV = "production"
+  PORT = "3001"
+
+# Run migrations on every deploy before starting the new VM.
+[deploy]
+  release_command = "node dist/db/migrate.js"
+
+[http_service]
+  internal_port = 3001
+  force_https = true
+  auto_stop_machines = false   # keep cron alive — we WANT this running 24/7
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/api/health"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256
