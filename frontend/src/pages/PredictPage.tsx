@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { format, subHours } from 'date-fns';
+import { format, subHours, isToday, addDays, isAfter, isBefore } from 'date-fns';
 import { Link } from 'react-router-dom';
+import { useState, useMemo } from 'react';
 import { matchesApi, predictionsApi } from '../api';
 import { Countdown } from '../components/Countdown';
 import { Match, MatchPrediction } from '../types';
-import { flag, teamColor } from '../utils/flags';
+import { flag, teamColor, localTimezoneLabel } from '../utils/flags';
 
 function deadlineFor(kickoff: string) {
   return subHours(new Date(kickoff), 1);
@@ -65,7 +66,7 @@ function MatchCard({ match, pred }: { match: Match; pred?: MatchPrediction }) {
             <span className="badge badge-gray" style={{ fontSize: 11 }}>
               {match.round === 'group' ? `Group ${match.group_name?.toUpperCase()}` : match.round.toUpperCase()}
             </span>
-            <span className="text-muted text-xs">{format(new Date(match.kickoff_time_utc), 'HH:mm')}</span>
+            <span className="text-muted text-xs">{format(new Date(match.kickoff_time_utc), 'HH:mm')} {localTimezoneLabel()}</span>
           </div>
 
           {/* Teams with waving flags */}
@@ -103,14 +104,58 @@ function MatchCard({ match, pred }: { match: Match; pred?: MatchPrediction }) {
   );
 }
 
+type Filter = 'next' | 'today' | 'group' | 'ko' | 'past' | 'all';
+
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: 'next',  label: 'Upcoming' },
+  { key: 'today', label: 'Today' },
+  { key: 'group', label: 'Group' },
+  { key: 'ko',    label: 'Knockout' },
+  { key: 'past',  label: 'Past' },
+  { key: 'all',   label: 'All' },
+];
+
+function isKnockout(round: string) {
+  return round !== 'group';
+}
+
+function applyFilter(matches: Match[], filter: Filter): Match[] {
+  const now = new Date();
+  const oneWeek = addDays(now, 7);
+  switch (filter) {
+    case 'next':
+      // Upcoming: not finished, kickoff within next 7 days
+      return matches.filter(m =>
+        m.status !== 'finished' &&
+        isAfter(new Date(m.kickoff_time_utc), now) &&
+        isBefore(new Date(m.kickoff_time_utc), oneWeek)
+      );
+    case 'today':
+      return matches.filter(m => isToday(new Date(m.kickoff_time_utc)));
+    case 'group':
+      return matches.filter(m => m.round === 'group');
+    case 'ko':
+      return matches.filter(m => isKnockout(m.round));
+    case 'past':
+      return matches.filter(m => m.status === 'finished' || isBefore(new Date(m.kickoff_time_utc), now));
+    case 'all':
+    default:
+      return matches;
+  }
+}
+
 export function PredictPage() {
   const { data: matches } = useQuery({ queryKey: ['matches'], queryFn: matchesApi.all });
   const { data: myPredictions } = useQuery({ queryKey: ['my-predictions'], queryFn: predictionsApi.my });
 
+  const [filter, setFilter] = useState<Filter>('next');
+
   const predMap = new Map(myPredictions?.map(p => [p.match_id, p]));
 
+  const filtered = useMemo(() => applyFilter(matches ?? [], filter), [matches, filter]);
+
   const grouped = new Map<string, Match[]>();
-  for (const m of matches ?? []) {
+  for (const m of filtered) {
     const day = format(new Date(m.kickoff_time_utc), 'yyyy-MM-dd');
     if (!grouped.has(day)) grouped.set(day, []);
     grouped.get(day)!.push(m);
@@ -144,6 +189,46 @@ export function PredictPage() {
           </div>
         )}
       </div>
+
+      {/* Filter chips */}
+      <div style={{
+        display: 'flex',
+        gap: 6,
+        overflowX: 'auto',
+        marginBottom: 14,
+        paddingBottom: 4,
+        WebkitOverflowScrolling: 'touch',
+      }}>
+        {FILTERS.map(({ key, label }) => {
+          const active = filter === key;
+          return (
+            <button
+              key={key}
+              onClick={() => setFilter(key)}
+              style={{
+                flex: '0 0 auto',
+                padding: '6px 14px',
+                borderRadius: 999,
+                border: 'none',
+                background: active ? 'white' : 'rgba(255,255,255,0.15)',
+                color: active ? 'var(--primary)' : 'white',
+                fontWeight: 700,
+                fontSize: 12,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      {filtered.length === 0 && (
+        <div className="card" style={{ textAlign: 'center', padding: 24 }}>
+          <p className="text-muted">No matches in this filter.</p>
+        </div>
+      )}
 
       {Array.from(grouped.entries()).map(([day, dayMatches]) => (
         <div key={day} style={{ marginBottom: 24 }}>

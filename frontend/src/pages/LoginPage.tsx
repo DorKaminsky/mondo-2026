@@ -35,7 +35,10 @@ export function LoginPage() {
           fontSize: 40, margin: '0 auto 16px',
         }}>⚽</div>
         <h1 style={{ fontSize: 28, fontWeight: 900, color: 'white' }}>WC2026 Predictions</h1>
-        <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)', marginTop: 4 }}>Sign in to your account</p>
+        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', marginTop: 4, fontStyle: 'italic' }}>
+          World Cup prediction pool — invite-only
+        </p>
+        <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)', marginTop: 12 }}>Sign in to your account</p>
       </div>
 
       <div className="card">

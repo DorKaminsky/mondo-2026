@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, subHours } from 'date-fns';
 import { matchesApi, predictionsApi } from '../api';
+import { localTimezoneLabel } from '../utils/flags';
 import { Countdown } from '../components/Countdown';
 import { PredictionResult, FirstScorer } from '../types';
 import { flag, teamColor } from '../utils/flags';
@@ -117,7 +118,7 @@ export function MatchPredictPage() {
             <span className="badge badge-gray" style={{ fontSize: 11 }}>
               {match.round === 'group' ? `Group ${match.group_name?.toUpperCase()}` : match.round.toUpperCase()}
             </span>
-            <span className="text-muted text-xs">{format(new Date(match.kickoff_time_utc), 'MMM d, HH:mm')}</span>
+            <span className="text-muted text-xs">{format(new Date(match.kickoff_time_utc), 'MMM d, HH:mm')} {localTimezoneLabel()}</span>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 8, alignItems: 'center' }}>

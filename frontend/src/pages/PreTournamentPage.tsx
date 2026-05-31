@@ -105,13 +105,6 @@ export function PreTournamentPage() {
           <input value={form.top_scorer_name ?? ''} onChange={e => set('top_scorer_name')(e.target.value)}
             placeholder="e.g. Kylian Mbappé" />
         </div>
-        <div className="form-group">
-          <label>Team</label>
-          <select value={form.top_scorer_team ?? ''} onChange={e => set('top_scorer_team')(e.target.value)}>
-            <option value="">— Select team —</option>
-            {ALL_TEAMS.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </div>
       </div>
 
       <div className="card">
@@ -120,13 +113,6 @@ export function PreTournamentPage() {
           <label>Player Name <span className="badge badge-blue">12 pts</span></label>
           <input value={form.top_assister_name ?? ''} onChange={e => set('top_assister_name')(e.target.value)}
             placeholder="e.g. Bruno Fernandes" />
-        </div>
-        <div className="form-group">
-          <label>Team</label>
-          <select value={form.top_assister_team ?? ''} onChange={e => set('top_assister_team')(e.target.value)}>
-            <option value="">— Select team —</option>
-            {ALL_TEAMS.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
         </div>
       </div>
 

@@ -183,6 +183,6 @@ describe('LeaderboardPage — empty state', () => {
       isLoading: false,
     });
     renderLeaderboard();
-    expect(screen.getByText(/No scores yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/No players yet/i)).toBeInTheDocument();
   });
 });

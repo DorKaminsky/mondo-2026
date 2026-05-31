@@ -111,11 +111,11 @@ export async function calculateMatchScores(matchId: number): Promise<void> {
 export async function calculatePreTournamentScores(
   actualWinner: string,
   actualRunnerUp: string,
-  actualTopScorerTeam: string,
-  actualTopAssisterTeam: string,
+  actualTopScorerName: string,
+  actualTopAssisterName: string,
   groupResults: Record<string, { first: string; second: string }>
 ): Promise<void> {
-  const { rows: predictions } = await query(
+  const { rows: predictions } = await query<Record<string, unknown>>(
     'SELECT * FROM pre_tournament_predictions WHERE is_final = true'
   );
 
@@ -128,8 +128,15 @@ export async function calculatePreTournamentScores(
 
       if (pred.winner_team === actualWinner) points += 16;
       if (pred.runner_up_team === actualRunnerUp) points += 8;
-      if (pred.top_scorer_team === actualTopScorerTeam) points += 12;
-      if (pred.top_assister_team === actualTopAssisterTeam) points += 12;
+      // Player picks now compare on name only (case-insensitive, trimmed) — team field has been dropped
+      const topScorerName = typeof pred.top_scorer_name === 'string' ? pred.top_scorer_name : '';
+      const topAssisterName = typeof pred.top_assister_name === 'string' ? pred.top_assister_name : '';
+      if (topScorerName.trim().toLowerCase() === actualTopScorerName.trim().toLowerCase() && topScorerName) {
+        points += 12;
+      }
+      if (topAssisterName.trim().toLowerCase() === actualTopAssisterName.trim().toLowerCase() && topAssisterName) {
+        points += 12;
+      }
 
       const groups = ['a','b','c','d','e','f','g','h','i','j','k','l'];
       for (const g of groups) {

@@ -3,17 +3,7 @@ import { format } from 'date-fns';
 import { leaderboardApi } from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import { MatchPrediction } from '../types';
-
-const AVATAR_COLORS = [
-  '#862633', '#2563eb', '#059669', '#7c3aed',
-  '#d97706', '#db2777', '#0891b2', '#65a30d',
-];
-
-function avatarColor(name: string) {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
-  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
-}
+import { avatarColor } from '../utils/flags';
 
 function PredRow({ pred }: { pred: MatchPrediction }) {
   const isFinished = pred.match_status === 'finished';
@@ -116,7 +106,22 @@ export function ProfilePage() {
         </div>
       )}
 
-      <button className="btn btn-secondary" onClick={logout} style={{ marginTop: 16 }}>
+      <button
+        onClick={logout}
+        style={{
+          marginTop: 24,
+          marginBottom: 8,
+          background: 'none',
+          border: 'none',
+          color: 'rgba(255,255,255,0.6)',
+          fontSize: 13,
+          fontWeight: 600,
+          cursor: 'pointer',
+          padding: '8px 16px',
+          width: '100%',
+          textAlign: 'center',
+        }}
+      >
         Sign Out
       </button>
     </div>

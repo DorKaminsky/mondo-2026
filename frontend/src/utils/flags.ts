@@ -104,3 +104,43 @@ export const TEAM_COLORS: Record<string, string> = {
 export function teamColor(team: string): string {
   return TEAM_COLORS[team] ?? '#862633';
 }
+
+// ── Avatar palette ──────────────────────────────────────────────────────────
+// Brighter, more saturated colors that pop on the dark WC gradient background.
+export const AVATAR_COLORS = [
+  '#ef4444', // red
+  '#f97316', // orange
+  '#eab308', // yellow
+  '#22c55e', // green
+  '#06b6d4', // cyan
+  '#3b82f6', // blue
+  '#8b5cf6', // violet
+  '#ec4899', // pink
+  '#14b8a6', // teal
+  '#84cc16', // lime
+];
+
+export function avatarColor(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
+}
+
+export function initials(name: string): string {
+  return name.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase();
+}
+
+/**
+ * Short label for the user's local timezone, e.g. "GMT+3" or "PDT".
+ * Browser may return either depending on locale; we normalize to "GMT±N" where possible.
+ */
+export function localTimezoneLabel(): string {
+  try {
+    const offset = -new Date().getTimezoneOffset() / 60;
+    const sign = offset >= 0 ? '+' : '-';
+    const abs = Math.abs(offset);
+    return `GMT${sign}${Number.isInteger(abs) ? abs : abs.toFixed(1)}`;
+  } catch {
+    return 'local';
+  }
+}

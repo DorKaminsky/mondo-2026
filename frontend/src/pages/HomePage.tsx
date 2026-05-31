@@ -4,17 +4,8 @@ import { Link } from 'react-router-dom';
 import { matchesApi, leaderboardApi, predictionsApi } from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import { Match } from '../types';
-import { flag, teamColor } from '../utils/flags';
-
-const AVATAR_COLORS = [
-  '#862633', '#2563eb', '#059669', '#7c3aed',
-  '#d97706', '#db2777', '#0891b2', '#65a30d',
-];
-function avatarColor(name: string) {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
-  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
-}
+import { flag, teamColor, avatarColor, localTimezoneLabel } from '../utils/flags';
+import { InstallPrompt } from '../components/InstallPrompt';
 
 function MatchCard({ match, compact }: { match: Match; compact?: boolean }) {
   const homeClr = teamColor(match.home_team);
@@ -39,7 +30,7 @@ function MatchCard({ match, compact }: { match: Match; compact?: boolean }) {
             <span className="badge badge-gray" style={{ fontSize: 11 }}>
               {match.round === 'group' ? `Group ${match.group_name?.toUpperCase()}` : match.round.toUpperCase()}
             </span>
-            <span className="text-muted text-xs">{format(new Date(match.kickoff_time_utc), 'EEE MMM d · HH:mm')}</span>
+            <span className="text-muted text-xs">{format(new Date(match.kickoff_time_utc), 'EEE MMM d · HH:mm')} {localTimezoneLabel()}</span>
           </div>
         )}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 8, alignItems: 'center' }}>
@@ -144,8 +135,20 @@ export function HomePage() {
     ?.filter((p) => p.match_status === 'finished')
     .slice(0, 3) ?? [];
 
+  // How many upcoming matches the user hasn't actively predicted?
+  // Counts: in upcoming list, NOT in myPredictions OR predicted as default.
+  const predictedNonDefaultIds = new Set(
+    (myPredictions ?? []).filter(p => !p.is_default).map(p => p.match_id)
+  );
+  const unpredictedCount = (upcoming ?? []).filter(m => {
+    if (predictedNonDefaultIds.has(m.id)) return false;
+    return new Date() < subHours(new Date(m.kickoff_time_utc), 1); // deadline not passed
+  }).length;
+
   return (
     <div className="page">
+      <InstallPrompt />
+
       {/* ── Hero ───────────────────────────────── */}
       <div className="hero" style={{ marginBottom: 14 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -154,7 +157,7 @@ export function HomePage() {
               FIFA World Cup 2026
             </div>
             <div style={{ fontSize: 24, fontWeight: 900, lineHeight: 1.15 }}>
-              Hey, {user?.name?.split(' ')[0]} 👋
+              Hey, {user?.name} 👋
             </div>
             <div style={{ fontSize: 13, opacity: 0.7, marginTop: 5 }}>
               May the best predictor win
@@ -190,6 +193,35 @@ export function HomePage() {
           </div>
         )}
       </div>
+
+      {/* ── Unpredicted nudge ────────────────────── */}
+      {unpredictedCount > 0 && (
+        <Link
+          to="/predict"
+          style={{
+            display: 'block',
+            marginBottom: 18,
+            padding: '12px 14px',
+            background: 'linear-gradient(90deg, rgba(232,160,32,0.25), rgba(232,160,32,0.1))',
+            border: '1px solid rgba(232,160,32,0.5)',
+            borderRadius: 12,
+            textDecoration: 'none',
+            color: 'white',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>
+                ⚡ You haven't predicted {unpredictedCount} upcoming {unpredictedCount === 1 ? 'match' : 'matches'}
+              </div>
+              <div style={{ fontSize: 11, opacity: 0.8, marginTop: 2 }}>
+                Tap to predict before deadlines lock in
+              </div>
+            </div>
+            <span style={{ fontSize: 18, fontWeight: 800 }}>→</span>
+          </div>
+        </Link>
+      )}
 
       {/* ── Live matches ─────────────────────────── */}
       {live && live.length > 0 && (

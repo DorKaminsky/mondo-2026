@@ -1,21 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { leaderboardApi } from '../api';
 import { useAuth } from '../contexts/AuthContext';
-
-const AVATAR_COLORS = [
-  '#862633', '#2563eb', '#059669', '#7c3aed',
-  '#d97706', '#db2777', '#0891b2', '#65a30d',
-];
-
-function avatarColor(name: string) {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
-  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
-}
-
-function initials(name: string) {
-  return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
-}
+import { avatarColor, initials } from '../utils/flags';
 
 export function LeaderboardPage() {
   const { user } = useAuth();
@@ -26,6 +12,52 @@ export function LeaderboardPage() {
   const board = data?.leaderboard ?? [];
   const top3 = board.slice(0, 3);
   const rest = board.slice(3);
+
+  // Tournament hasn't really started until someone has any non-zero score
+  const tournamentStarted = board.some(e => e.total_points > 0);
+
+  if (board.length === 0) {
+    return (
+      <div className="page">
+        <h1 style={{ fontSize: 22, fontWeight: 900, color: 'white', marginBottom: 16 }}>Standings</h1>
+        <div className="card" style={{ textAlign: 'center', padding: 32 }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>🏟️</div>
+          <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>No players yet</p>
+          <p className="text-muted text-sm">Share your league invite code so friends can join.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!tournamentStarted) {
+    return (
+      <div className="page">
+        <h1 style={{ fontSize: 22, fontWeight: 900, color: 'white', marginBottom: 16 }}>Standings</h1>
+        <div className="card" style={{ textAlign: 'center', padding: 32 }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>⚽</div>
+          <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>Tournament hasn't started</p>
+          <p className="text-muted text-sm" style={{ marginBottom: 16 }}>
+            Standings will appear here once the first match finishes.
+          </p>
+          <div style={{ background: 'var(--surface)', borderRadius: 10, padding: 14, marginTop: 12 }}>
+            <p className="text-muted text-xs" style={{ textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+              {board.length} {board.length === 1 ? 'player' : 'players'} in your league
+            </p>
+            {board.map((entry) => (
+              <div key={entry.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0' }}>
+                <div className="avatar" style={{ background: avatarColor(entry.name), width: 32, height: 32, fontSize: 12 }}>
+                  {initials(entry.name)}
+                </div>
+                <span style={{ fontWeight: 600, fontSize: 14 }}>
+                  {entry.name}{entry.id === user?.id ? ' 👈' : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page">
@@ -123,12 +155,6 @@ export function LeaderboardPage() {
               </div>
             );
           })}
-        </div>
-      )}
-
-      {board.length === 0 && (
-        <div className="card" style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>
-          No scores yet — tournament hasn't started!
         </div>
       )}
     </div>
