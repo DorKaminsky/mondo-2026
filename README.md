@@ -2,6 +2,8 @@
 
 A self-hosted World Cup 2026 betting platform for friends. League-based: each league has its own admin, members, and leaderboard. Sign-up requires an invite code from a league admin.
 
+> **🚀 Already deployed?** See [`docs/DEPLOYMENT_AND_OPERATIONS.md`](docs/DEPLOYMENT_AND_OPERATIONS.md) for the live URLs, where things run, the operational playbook, and the decisions log. Read that first if you're picking this project up after a gap.
+
 ## Stack
 
 - **Backend**: Express + TypeScript + PostgreSQL, JWT auth, node-cron, Joi validation, Winston logs.
