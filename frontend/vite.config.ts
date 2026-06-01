@@ -13,7 +13,7 @@ export default defineConfig({
         short_name: 'WC2026',
         start_url: '/',
         display: 'standalone',
-        theme_color: '#862633',
+        theme_color: '#1f6a3a',
         background_color: '#ffffff',
         icons: [
           { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
