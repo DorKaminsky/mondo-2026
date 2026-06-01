@@ -4,7 +4,7 @@ A self-hosted World Cup 2026 betting platform for friends. League-based: each le
 
 > **🚀 Already deployed?** See [`docs/DEPLOYMENT_AND_OPERATIONS.md`](docs/DEPLOYMENT_AND_OPERATIONS.md) for the live URLs, where things run, the operational playbook, and the decisions log. Read that first if you're picking this project up after a gap.
 >
-> **👋 New player joining a league?** See [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) for install instructions, how scoring works, and FAQ. ([Plain text version](docs/USER_GUIDE.txt) for sharing in chats.)
+> **👋 New player joining a league?** See [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) for install instructions, how scoring works, and FAQ. ([Plain text version](docs/USER_GUIDE.txt) for sharing in chats.) **Hebrew:** [`USER_GUIDE.he.md`](docs/USER_GUIDE.he.md) · [`USER_GUIDE.he.txt`](docs/USER_GUIDE.he.txt).
 
 ## Stack
 
