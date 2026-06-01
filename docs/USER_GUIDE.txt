@@ -1,0 +1,200 @@
+🏆 WC2026 PREDICTIONS POOL — WELCOME KIT
+=========================================
+
+Welcome to "Class Of 2014"! This is a private World Cup 2026
+prediction pool — predict match scores, earn points, climb the
+leaderboard, talk trash.
+
+────────────────────────────────────────
+⚡ TL;DR (read this if nothing else)
+────────────────────────────────────────
+
+1. Open https://mondo-2026-two.vercel.app/register on your phone
+2. Invite code:  J6WEVG
+3. Pick a name, email (any), password (8+ chars)
+4. Predict every match before kickoff
+5. Most points by July 19 wins 🥇
+
+That's it. The rest is detail for when you have questions.
+
+
+────────────────────────────────────────
+📱 INSTALL IT AS AN APP (recommended)
+────────────────────────────────────────
+
+The site works as a PWA — installs to your home screen like a
+real app, no App Store needed.
+
+iPhone:
+  1. Open the link in Safari (must be Safari, not Chrome)
+  2. Tap the Share button (square with up-arrow at bottom)
+  3. Scroll down → "Add to Home Screen" → Add
+  4. Done. Tap the icon to launch full-screen.
+
+Android:
+  1. Open the link in Chrome
+  2. A banner appears: "📱 Install this app" → tap Install
+  3. If no banner: ⋮ menu (top right) → "Install app"
+
+You can also just use it in the browser — installation is optional,
+just nicer.
+
+
+────────────────────────────────────────
+🎯 HOW PREDICTIONS WORK
+────────────────────────────────────────
+
+Every match has 5 SEPARATE things to predict. Get each one right,
+get points. No "all or nothing" — you can be partially right and
+still score.
+
+PER MATCH — 5 BETS:
+  1. Match result    (Home win / Draw / Away win)
+  2. Home team goals (exact number, e.g. 2)
+  3. Away team goals (exact number, e.g. 1)
+  4. First scoring team (Home / Away / None for 0-0)
+  5. Goal difference (exact difference, e.g. 1)
+
+POINTS PER CORRECT BET:
+  - Group stage:       2 pts each (max 10/match, "perfect ⭐")
+  - Knockout R32→Final: 3 pts each (max 15/match)
+
+PERFECT MATCH = all 5 bets correct. A ⭐ goes on your leaderboard
+row. Worth bragging about.
+
+EXAMPLE:
+  You predict:  Brazil 2-1 France, first scorer Brazil
+  Actual:       Brazil 2-1 France, first goal by Brazil
+  → All 5 correct → 10 pts (group) + ⭐
+
+  You predict:  Brazil 3-2 France, first scorer Brazil
+  Actual:       Brazil 2-1 France, first goal by Brazil
+  → Result ✓, home goals ✗, away goals ✗, first ✓, diff ✓
+  → 3 of 5 correct × 2 = 6 pts (no ⭐)
+
+
+────────────────────────────────────────
+🌍 PRE-TOURNAMENT PREDICTIONS (BIG BETS)
+────────────────────────────────────────
+
+Before the tournament starts you also predict the WHOLE thing.
+Big points, locked at tournament start.
+
+  Tournament winner ............ 16 pts
+  Runner-up .................... 8 pts
+  Top scorer (player name) ..... 12 pts  e.g. "Kylian Mbappé"
+  Top assister (player name) ... 12 pts  e.g. "Kevin De Bruyne"
+  Each group winner (×12) ...... 4 pts each
+  Each group runner-up (×12) ... 4 pts each
+
+Total possible from pre-tournament alone: 132 pts.
+
+You can edit your pre-tournament predictions anytime until
+JUNE 11, 2026 AT 14:00 UTC (1 hour before the opening match).
+After that — locked.
+
+
+────────────────────────────────────────
+⏰ DEADLINES
+────────────────────────────────────────
+
+- Each match prediction:    locks 1 hour before kickoff
+- Pre-tournament:           locks at tournament start (Jun 11)
+
+IF YOU MISS A DEADLINE:
+The system fills in a default prediction: 0-0 draw, no scorer.
+Scored at HALF RATE (1 pt per correct bet instead of 2/3).
+You can't earn the perfect ⭐ on defaults.
+
+Don't miss deadlines. The app shows a countdown next to every
+upcoming match.
+
+
+────────────────────────────────────────
+📊 THE LEADERBOARD
+────────────────────────────────────────
+
+- Updates within ~30 seconds of any match result.
+- Shows "Tournament hasn't started" until the first finished match.
+- Only your league's members appear — separate leagues, separate
+  boards.
+- Top 3 get medals 🥇🥈🥉. Everyone else in a table below.
+- "Perfect ⭐" count next to each player — pure flex stat.
+
+
+────────────────────────────────────────
+❓ FAQ
+────────────────────────────────────────
+
+Q: Can I change my prediction after I save it?
+A: Yes — any time before the deadline. Latest save wins.
+
+Q: I forgot to predict a match. What happens?
+A: Default 0-0 draw is filled in, scored at half rate.
+   You don't lose the match, just the multiplier and the ⭐.
+
+Q: Can I be in two leagues?
+A: One league per email. To play in two pools, register again
+   with a different email + that pool's code.
+
+Q: My invite code says "Invalid".
+A: Codes are 6 chars from a strict alphabet (no 0, O, 1, I).
+   Case-insensitive. Our code is J6WEVG — copy-paste it.
+
+Q: I forgot my password.
+A: No self-service reset yet. Ping Dor on WhatsApp.
+
+Q: Why does the app sometimes look outdated?
+A: PWAs cache aggressively. Pull-to-refresh once. Or close
+   and reopen the app.
+
+Q: Can I see what my friends predicted?
+A: Only AFTER the deadline passes. Then "group opinion" shows
+   how your league voted. No spoilers before kickoff.
+
+Q: What time zone is everything in?
+A: Match times shown in YOUR LOCAL TIME (with GMT±N label).
+   Deadlines are anchored to UTC kickoff − 1 hour.
+
+Q: Is there a mobile app in the App Store?
+A: No, and there won't be. PWAs do the same thing.
+
+Q: What about the prize pool?
+A: Off-platform. Settle with Dor however you usually do
+   (Bit/PayBox/Venmo/cash/a beer). The app doesn't handle money.
+
+
+────────────────────────────────────────
+🐛 KNOWN QUIRKS (NOT BUGS)
+────────────────────────────────────────
+
+- Standings show "Tournament hasn't started" until match 1
+  finishes. Normal — nothing to score yet.
+
+- The 🏆 Pre-Tournament chip is gold/yellow. Accent color,
+  not a warning.
+
+- Match cards have colored bars at the top. Team colors,
+  not status indicators.
+
+- "Default applied" badge after deadline = system filled in
+  a 0-0 because you didn't predict.
+
+- Install banner appears once. Dismiss = stays gone. To bring
+  it back, clear site data in your browser.
+
+
+────────────────────────────────────────
+🔗 QUICK LINKS
+────────────────────────────────────────
+
+App:        https://mondo-2026-two.vercel.app
+Register:   https://mondo-2026-two.vercel.app/register
+Code:       J6WEVG  (Class Of 2014)
+Source:     https://github.com/DorKaminsky/mondo-2026
+Questions:  ping Dor on WhatsApp
+
+
+────────────────────────────────────────
+
+Have fun. May the best predictor win 🏆⚽
