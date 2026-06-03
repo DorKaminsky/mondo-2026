@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, subHours } from 'date-fns';
 import { matchesApi, predictionsApi } from '../api';
@@ -29,6 +29,32 @@ function GoalStepper({ value, onChange }: { value: number; onChange: (v: number)
   );
 }
 
+// Compact label/value cell for the per-player prediction grid
+function Field({ label, value, flag }: { label: string; value: string; flag?: string }) {
+  return (
+    <div style={{
+      background: 'var(--green-light)',
+      borderRadius: 6,
+      padding: '5px 2px',
+      textAlign: 'center',
+      minWidth: 0,
+    }}>
+      <div style={{
+        fontSize: 9,
+        fontWeight: 700,
+        color: 'var(--text-muted)',
+        textTransform: 'uppercase',
+        letterSpacing: '0.04em',
+        marginBottom: 3,
+      }}>{label}</div>
+      <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--primary)', display: 'flex', gap: 2, justifyContent: 'center', alignItems: 'center', lineHeight: 1.1 }}>
+        {flag && <span style={{ fontSize: 13 }}>{flag}</span>}
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</span>
+      </div>
+    </div>
+  );
+}
+
 export function MatchPredictPage() {
   const { matchId } = useParams<{ matchId: string }>();
   const navigate = useNavigate();
@@ -51,6 +77,10 @@ export function MatchPredictPage() {
     refetchInterval: 30_000, // refresh every 30s in case the match was just scored
   });
 
+  // For "next match" navigation — load all matches + my predictions
+  const { data: allMatches } = useQuery({ queryKey: ['matches'], queryFn: matchesApi.all });
+  const { data: myPredictions } = useQuery({ queryKey: ['my-predictions'], queryFn: predictionsApi.my });
+
   const [result, setResult] = useState<PredictionResult>('home');
   const [homeGoals, setHomeGoals] = useState(0);
   const [awayGoals, setAwayGoals] = useState(0);
@@ -58,6 +88,9 @@ export function MatchPredictPage() {
   const [firstScorer, setFirstScorer] = useState<FirstScorer>('none');
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+  // Snapshot of the next match's id, used by the post-save redirect.
+  // Updated on every render once we've computed nextMatch below.
+  const nextMatchAtSubmit = useRef<number | null>(null);
 
   useEffect(() => {
     if (existing) {
@@ -82,7 +115,15 @@ export function MatchPredictPage() {
       qc.invalidateQueries({ queryKey: ['my-predictions'] });
       qc.invalidateQueries({ queryKey: ['prediction', matchId] });
       setSaved(true);
-      setTimeout(() => navigate('/predict'), 1200);
+      // After save, jump to the next un-predicted match if one exists; otherwise
+      // back to the predict list. Computed at click-time via a closure-stable ref.
+      setTimeout(() => {
+        if (nextMatchAtSubmit.current) {
+          navigate(`/predict/${nextMatchAtSubmit.current}`);
+        } else {
+          navigate('/predict');
+        }
+      }, 1200);
     },
     onError: (err: unknown) => {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
@@ -99,6 +140,27 @@ export function MatchPredictPage() {
   const pts = match.round === 'group' ? '2 pts' : '3 pts';
   const homeClr = teamColor(match.home_team);
   const awayClr = teamColor(match.away_team);
+
+  // Compute the "next match to predict": the soonest match after the current one
+  // whose deadline hasn't passed yet AND has real teams (not TBD bracket placeholders).
+  // Prefer matches the user hasn't predicted (or only has a default for) over already-predicted ones.
+  const predictedNonDefault = new Set(
+    (myPredictions ?? []).filter(p => !p.is_default).map(p => p.match_id)
+  );
+  const now = new Date();
+  const sortedFuture = (allMatches ?? [])
+    .filter(m =>
+      m.id !== Number(matchId) &&
+      m.status === 'scheduled' &&
+      !m.home_team.startsWith('TBD') &&
+      !m.away_team.startsWith('TBD') &&
+      new Date(m.kickoff_time_utc).getTime() - 60 * 60 * 1000 > now.getTime()
+    )
+    .sort((a, b) => new Date(a.kickoff_time_utc).getTime() - new Date(b.kickoff_time_utc).getTime());
+  // Prefer first un-predicted; fall back to first overall
+  const nextMatch = sortedFuture.find(m => !predictedNonDefault.has(m.id)) ?? sortedFuture[0] ?? null;
+  // Keep the ref synced for the mutation callback (which runs after async settle)
+  nextMatchAtSubmit.current = nextMatch?.id ?? null;
 
   return (
     <div className="page">
@@ -295,6 +357,43 @@ export function MatchPredictPage() {
           >
             {submit.isPending ? 'Saving...' : saved ? '✓ Saved!' : existing ? 'Update Prediction' : 'Save Prediction'}
           </button>
+
+          {/* Next-match shortcut button — always visible if there's a next match to predict */}
+          {nextMatch && (
+            <Link
+              to={`/predict/${nextMatch.id}`}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 10,
+                marginTop: 10,
+                padding: '12px 16px',
+                background: 'rgba(255,255,255,0.12)',
+                border: '1px solid rgba(255,255,255,0.25)',
+                borderRadius: 12,
+                textDecoration: 'none',
+                color: 'white',
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  Next match
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 800, marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span>{flag(nextMatch.home_team)}</span>
+                  <span>{nextMatch.home_team}</span>
+                  <span style={{ opacity: 0.6 }}>vs</span>
+                  <span>{nextMatch.away_team}</span>
+                  <span>{flag(nextMatch.away_team)}</span>
+                </div>
+                <div style={{ fontSize: 11, opacity: 0.7, marginTop: 2 }}>
+                  {format(new Date(nextMatch.kickoff_time_utc), 'EEE MMM d · HH:mm')} {localTimezoneLabel()}
+                </div>
+              </div>
+              <span style={{ fontSize: 22, fontWeight: 900, flexShrink: 0 }}>→</span>
+            </Link>
+          )}
         </>
       )}
 
@@ -306,78 +405,73 @@ export function MatchPredictPage() {
             <span>Everyone's Predictions ({allPredictions.predictions.length})</span>
           </p>
           <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-            {/* Column headers */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '36px 1fr 70px 60px 60px',
-              gap: 8,
-              padding: '8px 14px',
-              background: 'var(--green-light)',
-              fontSize: 10,
-              fontWeight: 800,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              color: 'var(--text-muted)',
-              borderBottom: '1px solid var(--border)',
-            }}>
-              <span></span>
-              <span>Player</span>
-              <span style={{ textAlign: 'center' }}>Score</span>
-              <span style={{ textAlign: 'center' }}>1st</span>
-              <span style={{ textAlign: 'right' }}>Pts</span>
-            </div>
             {allPredictions.predictions.map((p, i) => {
               const finished = match.status === 'finished';
+              const resultLabel = p.prediction_result === 'home'
+                ? 'Home'
+                : p.prediction_result === 'away'
+                  ? 'Away'
+                  : 'Draw';
+              const firstScorerLabel = p.first_scorer === 'home'
+                ? 'Home'
+                : p.first_scorer === 'away'
+                  ? 'Away'
+                  : 'None';
+              const firstScorerFlag = p.first_scorer === 'home'
+                ? flag(match.home_team)
+                : p.first_scorer === 'away'
+                  ? flag(match.away_team)
+                  : '🚫';
+
               return (
                 <div
                   key={p.id}
                   style={{
-                    display: 'grid',
-                    gridTemplateColumns: '36px 1fr 70px 60px 60px',
-                    gap: 8,
-                    padding: '10px 14px',
+                    padding: '14px',
                     borderTop: i > 0 ? '1px solid var(--border)' : 'none',
-                    alignItems: 'center',
                     background: p.is_default ? 'rgba(232,160,32,0.08)' : 'white',
                   }}
                 >
-                  <div className="avatar" style={{ background: avatarColor(p.name), width: 30, height: 30, fontSize: 11 }}>
-                    {initials(p.name)}
-                  </div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {p.name}
+                  {/* Player row */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                    <div className="avatar" style={{ background: avatarColor(p.name), width: 32, height: 32, fontSize: 12 }}>
+                      {initials(p.name)}
                     </div>
-                    {p.is_default && (
-                      <div style={{ fontSize: 10, color: 'var(--accent-dark)', fontWeight: 600 }}>
-                        ⚠️ Auto-default
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {p.name}
+                      </div>
+                      {p.is_default && (
+                        <div style={{ fontSize: 10, color: 'var(--accent-dark)', fontWeight: 600 }}>
+                          ⚠️ Auto-default (didn't predict)
+                        </div>
+                      )}
+                    </div>
+                    {finished && p.points_earned != null && (
+                      <div style={{
+                        fontWeight: 800,
+                        fontSize: 15,
+                        color: p.points_earned > 0 ? 'var(--primary)' : 'var(--text-muted)',
+                        background: p.points_earned > 0 ? 'rgba(31,106,58,0.12)' : 'transparent',
+                        padding: '4px 10px',
+                        borderRadius: 999,
+                      }}>
+                        +{p.points_earned} pts
                       </div>
                     )}
-                    {!p.is_default && (
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-                        {p.prediction_result === 'home' ? `${match.home_team} win` : p.prediction_result === 'away' ? `${match.away_team} win` : 'Draw'} · diff {p.goal_difference}
-                      </div>
-                    )}
                   </div>
+
+                  {/* All 5 prediction fields, each labeled */}
                   <div style={{
-                    textAlign: 'center',
-                    fontWeight: 900,
-                    fontSize: 16,
-                    color: p.is_default ? 'var(--text-muted)' : 'var(--primary)',
-                    letterSpacing: 1,
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(5, 1fr)',
+                    gap: 4,
                   }}>
-                    {p.team_a_goals}–{p.team_b_goals}
-                  </div>
-                  <div style={{ textAlign: 'center', fontSize: 18 }}>
-                    {p.first_scorer === 'home' ? flag(match.home_team) : p.first_scorer === 'away' ? flag(match.away_team) : '—'}
-                  </div>
-                  <div style={{
-                    textAlign: 'right',
-                    fontWeight: 800,
-                    fontSize: 14,
-                    color: finished && p.points_earned != null ? 'var(--primary)' : 'var(--text-muted)',
-                  }}>
-                    {finished && p.points_earned != null ? `+${p.points_earned}` : '—'}
+                    <Field label="Result" value={resultLabel} />
+                    <Field label="Home" value={String(p.team_a_goals)} flag={flag(match.home_team)} />
+                    <Field label="Away" value={String(p.team_b_goals)} flag={flag(match.away_team)} />
+                    <Field label="Diff" value={String(p.goal_difference)} />
+                    <Field label="1st" value={firstScorerLabel} flag={firstScorerFlag} />
                   </div>
                 </div>
               );

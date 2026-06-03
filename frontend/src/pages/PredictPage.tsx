@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { format, subHours, isToday, addDays, isAfter, isBefore } from 'date-fns';
+import { format, subHours, isToday, isAfter, isBefore } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { useState, useMemo } from 'react';
 import { matchesApi, predictionsApi } from '../api';
@@ -121,15 +121,14 @@ function isKnockout(round: string) {
 
 function applyFilter(matches: Match[], filter: Filter): Match[] {
   const now = new Date();
-  const oneWeek = addDays(now, 7);
   switch (filter) {
     case 'next':
-      // Upcoming: not finished, kickoff within next 7 days
-      return matches.filter(m =>
-        m.status !== 'finished' &&
-        isAfter(new Date(m.kickoff_time_utc), now) &&
-        isBefore(new Date(m.kickoff_time_utc), oneWeek)
-      );
+      // "Upcoming" = next 10 matches that haven't kicked off yet, regardless of how far out.
+      // Sorted by kickoff ascending so the very next match is first.
+      return matches
+        .filter(m => m.status !== 'finished' && isAfter(new Date(m.kickoff_time_utc), now))
+        .sort((a, b) => new Date(a.kickoff_time_utc).getTime() - new Date(b.kickoff_time_utc).getTime())
+        .slice(0, 10);
     case 'today':
       return matches.filter(m => isToday(new Date(m.kickoff_time_utc)));
     case 'group':
