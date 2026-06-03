@@ -10,6 +10,8 @@ leaderboardRouter.get('/', authenticate, async (req: Request, res: Response) => 
     res.json({ leaderboard: [], currentUserId: req.user!.id });
     return;
   }
+  // Anyone in the league competes (players AND super_admins who set league_id),
+  // except admins (league moderators) — they oversee but don't compete.
   const { rows } = await query(
     `SELECT
        u.id, u.name,
@@ -18,7 +20,7 @@ leaderboardRouter.get('/', authenticate, async (req: Request, res: Response) => 
        RANK() OVER (ORDER BY s.total_points DESC, s.perfect_matches_count DESC) AS rank
      FROM scores s
      JOIN users u ON s.user_id = u.id
-     WHERE u.role = 'player' AND u.league_id = $1
+     WHERE u.league_id = $1 AND u.role != 'admin'
      ORDER BY s.total_points DESC, s.perfect_matches_count DESC`,
     [leagueId]
   );
@@ -82,7 +84,7 @@ leaderboardRouter.get('/summary', authenticate, async (req: Request, res: Respon
        u.last_seen_at,
        u.name,
        (SELECT COUNT(*) + 1 FROM scores s2 JOIN users u2 ON u2.id = s2.user_id
-          WHERE u2.league_id = $2 AND u2.role = 'player'
+          WHERE u2.league_id = $2 AND u2.role != 'admin'
             AND (s2.total_points > COALESCE(s.total_points, 0)
                  OR (s2.total_points = COALESCE(s.total_points, 0)
                      AND COALESCE(s2.perfect_matches_count, 0) > COALESCE(s.perfect_matches_count, 0)))
@@ -114,7 +116,7 @@ leaderboardRouter.get('/summary', authenticate, async (req: Request, res: Respon
                                   COALESCE(s.perfect_matches_count, 0) DESC) AS rnk
        FROM users u
        LEFT JOIN scores s ON s.user_id = u.id
-      WHERE u.league_id = $1 AND u.role = 'player'
+      WHERE u.league_id = $1 AND u.role != 'admin'
       ORDER BY rnk ASC`,
     [leagueId]
   );

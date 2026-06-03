@@ -80,7 +80,7 @@ export async function calculateMatchScores(matchId: number): Promise<void> {
      SELECT u.id, $1, 'draw', 0, 0, 'none', 0, true
        FROM users u
        LEFT JOIN match_predictions mp ON mp.user_id = u.id AND mp.match_id = $1
-      WHERE u.role = 'player' AND mp.id IS NULL
+      WHERE u.role != 'admin' AND u.league_id IS NOT NULL AND mp.id IS NULL
      ON CONFLICT DO NOTHING`,
     [matchId]
   );
@@ -214,11 +214,11 @@ export async function applyDefaultPredictions(): Promise<void> {
   );
 
   for (const match of matches) {
-    // Find users without a prediction for this match
+    // Find competing users (any role except 'admin', must be in a league) without a prediction
     const { rows: usersWithout } = await query(
       `SELECT u.id FROM users u
        LEFT JOIN match_predictions mp ON mp.user_id = u.id AND mp.match_id = $1
-       WHERE u.role = 'player' AND mp.id IS NULL`,
+       WHERE u.role != 'admin' AND u.league_id IS NOT NULL AND mp.id IS NULL`,
       [match.id]
     );
 
