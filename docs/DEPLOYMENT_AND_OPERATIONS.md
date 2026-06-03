@@ -8,13 +8,23 @@ Last updated: 2026-05-31 (initial production ship).
 
 ## 1. The "where is everything" map
 
-| Component | Provider | Free? | URL / Identifier |
+| Component | Provider | Cost | URL / Identifier |
 |---|---|---|---|
-| Frontend (PWA) | Vercel | Yes | https://mondo-2026-two.vercel.app |
-| Backend (Express API) | Fly.io | Yes (CC required, no charge in our usage) | https://mondo-2026-dk.fly.dev |
-| Database (Postgres 16) | Neon | Yes | console.neon.tech project: `mondo-2026` |
-| Source code | GitHub | Yes (public) | https://github.com/DorKaminsky/mondo-2026 |
+| Frontend (PWA) | Vercel | Free (Hobby plan) | https://mondo-2026-two.vercel.app |
+| Backend (Express API) | Fly.io | **~$4–6/mo** (NOT free since late 2024) | https://mondo-2026-dk.fly.dev |
+| Database (Postgres 16) | Neon | Free tier | console.neon.tech project: `mondo-2026` |
+| Source code | GitHub | Free (public repo) | https://github.com/DorKaminsky/mondo-2026 |
 | Owner accounts | — | — | github: DorKaminsky · vercel: dorkaminsky · fly: kaminskydor@gmail.com |
+
+### Fly cost details
+
+Fly retired their free allowance in late 2024. We're running 2× `shared-cpu-1x:256MB` machines in `fra` 24/7 (HA pair, default of `fly launch`). At Fly's current rates that's **~$1.94/VM/month × 2 ≈ $3.88/month** plus tiny egress.
+
+To cut to 1 VM and halve the bill, edit `backend/fly.toml`: set `min_machines_running = 0` and `fly deploy`. Loses zero-downtime deploys but for a friends-pool app that's fine.
+
+To stop charges entirely after the tournament: `fly apps destroy mondo-2026-dk` (re-deployable from this repo any time).
+
+Verify current bill at https://fly.io/dashboard/personal/billing.
 
 ### Region
 - Fly app primary region: `fra` (Frankfurt) — close to Israel/Europe.
