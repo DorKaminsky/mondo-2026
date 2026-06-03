@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, subHours } from 'date-fns';
 import { matchesApi, predictionsApi } from '../api';
 import { localTimezoneLabel } from '../utils/flags';
+import { CalendarReminder } from '../components/CalendarReminder';
 import { Countdown } from '../components/Countdown';
 import { PredictionResult, FirstScorer } from '../types';
 import { flag, teamColor } from '../utils/flags';
@@ -120,7 +121,6 @@ export function MatchPredictPage() {
             </span>
             <span className="text-muted text-xs">{format(new Date(match.kickoff_time_utc), 'MMM d, HH:mm')} {localTimezoneLabel()}</span>
           </div>
-
           <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 8, alignItems: 'center' }}>
             <div style={{ textAlign: 'center' }}>
               <div className="flag-wave" style={{ fontSize: 42, lineHeight: 1 }}>{flag(match.home_team)}</div>
@@ -142,6 +142,16 @@ export function MatchPredictPage() {
           </div>
 
           {!isPast && <div style={{ textAlign: 'center', marginTop: 12 }}><Countdown deadline={deadline} /></div>}
+          {!isPast && (
+            <div style={{ textAlign: 'center', marginTop: 10 }}>
+              <CalendarReminder
+                matchId={match.id}
+                homeTeam={match.home_team}
+                awayTeam={match.away_team}
+                kickoffUtc={match.kickoff_time_utc}
+              />
+            </div>
+          )}
         </div>
       </div>
 

@@ -108,6 +108,7 @@ export function HomePage() {
   const { data: myStats } = useQuery({ queryKey: ['my-stats'], queryFn: leaderboardApi.me });
   const { data: groupStats } = useQuery({ queryKey: ['group-stats'], queryFn: leaderboardApi.stats });
   const { data: myPredictions } = useQuery({ queryKey: ['my-predictions'], queryFn: predictionsApi.my });
+  const { data: summary } = useQuery({ queryKey: ['my-summary'], queryFn: leaderboardApi.summary, staleTime: Infinity });
 
   const myRank = leaderboardData?.leaderboard.find(e => e.id === user?.id);
   const top5 = leaderboardData?.leaderboard.slice(0, 5) ?? [];
@@ -148,6 +149,25 @@ export function HomePage() {
   return (
     <div className="page">
       <InstallPrompt />
+
+      {/* ── "Since last visit" banner ───────────────── */}
+      {summary && summary.pointsSinceLastVisit > 0 && (
+        <div style={{
+          marginBottom: 14,
+          padding: '12px 14px',
+          background: 'linear-gradient(90deg, rgba(76,175,80,0.3), rgba(139,195,74,0.15))',
+          border: '1px solid rgba(139,195,74,0.5)',
+          borderRadius: 12,
+          color: 'white',
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700 }}>
+            🎉 +{summary.pointsSinceLastVisit} pts since your last visit!
+          </div>
+          <div style={{ fontSize: 11, opacity: 0.85, marginTop: 2 }}>
+            You're now ranked #{summary.myRank} in your league of {summary.leagueSize}.
+          </div>
+        </div>
+      )}
 
       {/* ── Hero ───────────────────────────────── */}
       <div className="hero" style={{ marginBottom: 14 }}>
@@ -194,6 +214,45 @@ export function HomePage() {
         )}
       </div>
 
+      {/* ── Gap tiles (1st / above / below) ─────── */}
+      {summary && summary.gaps && (summary.gaps.first || summary.gaps.above || summary.gaps.below) && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+          {summary.gaps.first && (
+            <div style={{ flex: 1, background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 10, padding: '8px 8px', textAlign: 'center' }}>
+              <div style={{ fontSize: 9, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>🥇 1st</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'white', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {summary.gaps.first.name}
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: '#ffd700', marginTop: 2 }}>
+                {summary.gaps.first.delta > 0 ? `+${summary.gaps.first.delta}` : '✓ You'}
+              </div>
+            </div>
+          )}
+          {summary.gaps.above && (
+            <div style={{ flex: 1, background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 10, padding: '8px 8px', textAlign: 'center' }}>
+              <div style={{ fontSize: 9, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>↑ Above</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'white', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {summary.gaps.above.name}
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: '#ff9494', marginTop: 2 }}>
+                +{summary.gaps.above.delta}
+              </div>
+            </div>
+          )}
+          {summary.gaps.below && (
+            <div style={{ flex: 1, background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 10, padding: '8px 8px', textAlign: 'center' }}>
+              <div style={{ fontSize: 9, fontWeight: 700, opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>↓ Below</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'white', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {summary.gaps.below.name}
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: '#94ff94', marginTop: 2 }}>
+                {summary.gaps.below.delta}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Unpredicted nudge ────────────────────── */}
       {unpredictedCount > 0 && (
         <Link
@@ -227,7 +286,11 @@ export function HomePage() {
       {live && live.length > 0 && (
         <section style={{ marginBottom: 20 }}>
           <p className="section-header">🔴 Live Now</p>
-          {live.map(m => <MatchCard key={m.id} match={m} />)}
+          {live.map(m => (
+            <Link key={m.id} to={`/predict/${m.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
+              <MatchCard match={m} />
+            </Link>
+          ))}
         </section>
       )}
 
@@ -263,7 +326,11 @@ export function HomePage() {
       {upcoming && upcoming.length > 1 && (
         <section style={{ marginBottom: 20 }}>
           <p className="section-header">📅 Coming Up</p>
-          {upcoming.slice(1, 4).map(m => <MatchCard key={m.id} match={m} compact />)}
+          {upcoming.slice(1, 4).map(m => (
+            <Link key={m.id} to={`/predict/${m.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
+              <MatchCard match={m} compact />
+            </Link>
+          ))}
           <Link to="/predict" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.8)', fontWeight: 700, fontSize: 14, padding: '10px 0', textDecoration: 'none' }}>
             All matches →
           </Link>

@@ -69,6 +69,19 @@ export const leaderboardApi = {
     api.get<{ score: Score | null; matchHistory: MatchPrediction[] }>('/leaderboard/me').then(r => r.data),
   stats: () =>
     api.get('/leaderboard/stats').then(r => r.data),
+  summary: () =>
+    api.get<{
+      pointsSinceLastVisit: number;
+      lastSeenAt: string | null;
+      myRank: number | null;
+      myPoints: number;
+      leagueSize: number;
+      gaps: {
+        first: { name: string; points: number; delta: number } | null;
+        above: { name: string; points: number; delta: number } | null;
+        below: { name: string; points: number; delta: number } | null;
+      };
+    }>('/leaderboard/summary').then(r => r.data),
 };
 
 // Admin

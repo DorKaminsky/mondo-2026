@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
+import { Link } from 'react-router-dom';
 import { leaderboardApi } from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import { MatchPrediction } from '../types';
@@ -106,10 +107,16 @@ export function ProfilePage() {
         </div>
       )}
 
+      <div style={{ display: 'flex', gap: 12, marginTop: 16, justifyContent: 'center' }}>
+        <Link to="/rules" style={{ color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: 600, textDecoration: 'underline' }}>
+          📖 Rules & FAQ
+        </Link>
+      </div>
+
       <button
         onClick={logout}
         style={{
-          marginTop: 24,
+          marginTop: 8,
           marginBottom: 8,
           background: 'none',
           border: 'none',
