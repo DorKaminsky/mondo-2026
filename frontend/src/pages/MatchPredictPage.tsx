@@ -77,9 +77,8 @@ export function MatchPredictPage() {
     refetchInterval: 30_000, // refresh every 30s in case the match was just scored
   });
 
-  // For "next match" navigation — load all matches + my predictions
+  // For "next match" navigation — load all matches
   const { data: allMatches } = useQuery({ queryKey: ['matches'], queryFn: matchesApi.all });
-  const { data: myPredictions } = useQuery({ queryKey: ['my-predictions'], queryFn: predictionsApi.my });
 
   const [result, setResult] = useState<PredictionResult>('home');
   const [homeGoals, setHomeGoals] = useState(0);
@@ -141,24 +140,23 @@ export function MatchPredictPage() {
   const homeClr = teamColor(match.home_team);
   const awayClr = teamColor(match.away_team);
 
-  // Compute the "next match to predict": the soonest match after the current one
-  // whose deadline hasn't passed yet AND has real teams (not TBD bracket placeholders).
-  // Prefer matches the user hasn't predicted (or only has a default for) over already-predicted ones.
-  const predictedNonDefault = new Set(
-    (myPredictions ?? []).filter(p => !p.is_default).map(p => p.match_id)
-  );
+  // "Next match" = the very next match by kickoff time after the current one,
+  // whose deadline hasn't passed and which has real teams (not TBD bracket placeholders).
+  // Pure time-based — no preference for un-predicted, no skipping logic.
+  // This means: even if you've already predicted the next match, the button still
+  // takes you there. You can use it to walk through matches in order.
   const now = new Date();
-  const sortedFuture = (allMatches ?? [])
+  const currentKickoff = new Date(match.kickoff_time_utc).getTime();
+  const nextMatch = (allMatches ?? [])
     .filter(m =>
       m.id !== Number(matchId) &&
       m.status === 'scheduled' &&
       !m.home_team.startsWith('TBD') &&
       !m.away_team.startsWith('TBD') &&
+      new Date(m.kickoff_time_utc).getTime() > currentKickoff &&
       new Date(m.kickoff_time_utc).getTime() - 60 * 60 * 1000 > now.getTime()
     )
-    .sort((a, b) => new Date(a.kickoff_time_utc).getTime() - new Date(b.kickoff_time_utc).getTime());
-  // Prefer first un-predicted; fall back to first overall
-  const nextMatch = sortedFuture.find(m => !predictedNonDefault.has(m.id)) ?? sortedFuture[0] ?? null;
+    .sort((a, b) => new Date(a.kickoff_time_utc).getTime() - new Date(b.kickoff_time_utc).getTime())[0] ?? null;
   // Keep the ref synced for the mutation callback (which runs after async settle)
   nextMatchAtSubmit.current = nextMatch?.id ?? null;
 
