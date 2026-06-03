@@ -51,6 +51,17 @@ export const predictionsApi = {
   my: () => api.get<{ predictions: MatchPrediction[] }>('/predictions/my').then(r => r.data.predictions),
   forMatch: (matchId: number) =>
     api.get<{ prediction: MatchPrediction | null }>(`/predictions/match/${matchId}`).then(r => r.data.prediction),
+  allForMatch: (matchId: number) =>
+    api.get<{
+      predictions: Array<{
+        id: number; user_id: number; name: string; role: string;
+        prediction_result: PredictionResult;
+        team_a_goals: number; team_b_goals: number;
+        first_scorer: FirstScorer; goal_difference: number;
+        is_default: boolean; points_earned: number | null;
+      }>;
+      deadlinePassed: boolean;
+    }>(`/predictions/match/${matchId}/all`).then(r => r.data),
 };
 
 // Pre-tournament

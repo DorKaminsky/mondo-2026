@@ -7,7 +7,7 @@ import { localTimezoneLabel } from '../utils/flags';
 import { CalendarReminder } from '../components/CalendarReminder';
 import { Countdown } from '../components/Countdown';
 import { PredictionResult, FirstScorer } from '../types';
-import { flag, teamColor } from '../utils/flags';
+import { flag, teamColor, avatarColor, initials } from '../utils/flags';
 
 function GoalStepper({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
@@ -42,6 +42,13 @@ export function MatchPredictPage() {
   const { data: existing } = useQuery({
     queryKey: ['prediction', matchId],
     queryFn: () => predictionsApi.forMatch(Number(matchId)),
+  });
+
+  // All league predictions for this match — only populated after deadline
+  const { data: allPredictions } = useQuery({
+    queryKey: ['all-predictions', matchId],
+    queryFn: () => predictionsApi.allForMatch(Number(matchId)),
+    refetchInterval: 30_000, // refresh every 30s in case the match was just scored
   });
 
   const [result, setResult] = useState<PredictionResult>('home');
@@ -289,6 +296,97 @@ export function MatchPredictPage() {
             {submit.isPending ? 'Saving...' : saved ? '✓ Saved!' : existing ? 'Update Prediction' : 'Save Prediction'}
           </button>
         </>
+      )}
+
+      {/* ── Everyone's predictions (only visible after deadline) ─────────── */}
+      {allPredictions?.deadlinePassed && allPredictions.predictions.length > 0 && (
+        <div style={{ marginTop: 24 }}>
+          <p className="section-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span>🔓</span>
+            <span>Everyone's Predictions ({allPredictions.predictions.length})</span>
+          </p>
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            {/* Column headers */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '36px 1fr 70px 60px 60px',
+              gap: 8,
+              padding: '8px 14px',
+              background: 'var(--green-light)',
+              fontSize: 10,
+              fontWeight: 800,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              color: 'var(--text-muted)',
+              borderBottom: '1px solid var(--border)',
+            }}>
+              <span></span>
+              <span>Player</span>
+              <span style={{ textAlign: 'center' }}>Score</span>
+              <span style={{ textAlign: 'center' }}>1st</span>
+              <span style={{ textAlign: 'right' }}>Pts</span>
+            </div>
+            {allPredictions.predictions.map((p, i) => {
+              const finished = match.status === 'finished';
+              return (
+                <div
+                  key={p.id}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '36px 1fr 70px 60px 60px',
+                    gap: 8,
+                    padding: '10px 14px',
+                    borderTop: i > 0 ? '1px solid var(--border)' : 'none',
+                    alignItems: 'center',
+                    background: p.is_default ? 'rgba(232,160,32,0.08)' : 'white',
+                  }}
+                >
+                  <div className="avatar" style={{ background: avatarColor(p.name), width: 30, height: 30, fontSize: 11 }}>
+                    {initials(p.name)}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {p.name}
+                    </div>
+                    {p.is_default && (
+                      <div style={{ fontSize: 10, color: 'var(--accent-dark)', fontWeight: 600 }}>
+                        ⚠️ Auto-default
+                      </div>
+                    )}
+                    {!p.is_default && (
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                        {p.prediction_result === 'home' ? `${match.home_team} win` : p.prediction_result === 'away' ? `${match.away_team} win` : 'Draw'} · diff {p.goal_difference}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{
+                    textAlign: 'center',
+                    fontWeight: 900,
+                    fontSize: 16,
+                    color: p.is_default ? 'var(--text-muted)' : 'var(--primary)',
+                    letterSpacing: 1,
+                  }}>
+                    {p.team_a_goals}–{p.team_b_goals}
+                  </div>
+                  <div style={{ textAlign: 'center', fontSize: 18 }}>
+                    {p.first_scorer === 'home' ? flag(match.home_team) : p.first_scorer === 'away' ? flag(match.away_team) : '—'}
+                  </div>
+                  <div style={{
+                    textAlign: 'right',
+                    fontWeight: 800,
+                    fontSize: 14,
+                    color: finished && p.points_earned != null ? 'var(--primary)' : 'var(--text-muted)',
+                  }}>
+                    {finished && p.points_earned != null ? `+${p.points_earned}` : '—'}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-muted text-xs" style={{ textAlign: 'center', marginTop: 8 }}>
+            Predictions become visible once the deadline passes. Auto-default = player didn't predict in time.
+          </p>
+        </div>
       )}
     </div>
   );

@@ -79,3 +79,38 @@ predictionsRouter.get('/match/:matchId', authenticate, async (req: Request, res:
   );
   res.json({ prediction: rows[0] ?? null });
 });
+
+// All league members' predictions for a match — only after deadline (1h before kickoff).
+// Returns name + 5 fields per user. is_default flag included so frontend can mark
+// "missed deadline" entries differently.
+predictionsRouter.get('/match/:matchId/all', authenticate, async (req: Request, res: Response) => {
+  const matchId = parseInt(req.params.matchId, 10);
+  if (Number.isNaN(matchId)) { res.status(400).json({ error: 'Invalid match id' }); return; }
+
+  const leagueId = req.user!.league_id;
+  if (!leagueId) { res.json({ predictions: [], deadlinePassed: false }); return; }
+
+  const { rows: matchRows } = await query<{ kickoff_time_utc: Date }>(
+    'SELECT kickoff_time_utc FROM matches WHERE id = $1', [matchId]
+  );
+  if (matchRows.length === 0) { res.status(404).json({ error: 'Match not found' }); return; }
+
+  const kickoff = new Date(matchRows[0].kickoff_time_utc);
+  const deadline = new Date(kickoff.getTime() - 60 * 60 * 1000);
+  const deadlinePassed = new Date() > deadline;
+  if (!deadlinePassed) { res.json({ predictions: [], deadlinePassed: false }); return; }
+
+  const { rows } = await query(
+    `SELECT mp.id, mp.user_id, u.name, u.role,
+            mp.prediction_result, mp.team_a_goals, mp.team_b_goals,
+            mp.first_scorer, mp.goal_difference,
+            mp.is_default, mp.points_earned
+       FROM match_predictions mp
+       JOIN users u ON u.id = mp.user_id
+      WHERE mp.match_id = $1 AND u.league_id = $2 AND u.role != 'admin'
+      ORDER BY mp.points_earned DESC NULLS LAST, mp.is_default ASC, u.name ASC`,
+    [matchId, leagueId]
+  );
+
+  res.json({ predictions: rows, deadlinePassed: true });
+});
