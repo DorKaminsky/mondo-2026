@@ -21,6 +21,10 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Aggressively replace the old SW so users get fresh bundles after deploys
+        clientsClaim: true,
+        skipWaiting: true,
+        cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
             urlPattern: /^\/api\/matches/,

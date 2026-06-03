@@ -78,6 +78,9 @@ export function AdminDashboard() {
         <Link to="/admin/matches" className="btn btn-secondary" style={{ textDecoration: 'none' }}>
           ⚽ Enter Match Results
         </Link>
+        <Link to="/admin/pre-tournament" className="btn btn-secondary" style={{ textDecoration: 'none' }}>
+          🏆 Pre-Tournament Results
+        </Link>
         <Link to="/admin/users" className="btn btn-secondary" style={{ textDecoration: 'none' }}>
           👥 Manage Users
         </Link>

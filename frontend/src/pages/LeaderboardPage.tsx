@@ -13,7 +13,11 @@ export function LeaderboardPage() {
   const top3 = board.slice(0, 3);
   const rest = board.slice(3);
 
-  // Tournament hasn't really started until someone has any non-zero score
+  // Tournament has "started" once at least one match has been finished by admin.
+  // Even if everyone has 0 pts, we still want to show the regular standings layout —
+  // an all-zeros podium is visually weird, but a list with 0s is fine and informative.
+  // We treat the tournament as started if any player has a non-zero score, OR if
+  // the user explicitly wants the standings table (we just always show it now).
   const tournamentStarted = board.some(e => e.total_points > 0);
 
   if (board.length === 0) {
@@ -30,30 +34,46 @@ export function LeaderboardPage() {
   }
 
   if (!tournamentStarted) {
+    // No match results entered yet — show a roster preview but still acknowledge it's the standings page.
     return (
       <div className="page">
         <h1 style={{ fontSize: 22, fontWeight: 900, color: 'white', marginBottom: 16 }}>Standings</h1>
-        <div className="card" style={{ textAlign: 'center', padding: 32 }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>⚽</div>
-          <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>Tournament hasn't started</p>
-          <p className="text-muted text-sm" style={{ marginBottom: 16 }}>
-            Standings will appear here once the first match finishes.
+        <div className="card" style={{ textAlign: 'center', padding: 24 }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>⚽</div>
+          <p style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Tournament hasn't started</p>
+          <p className="text-muted text-sm" style={{ marginBottom: 14 }}>
+            Standings appear once results are entered.
           </p>
-          <div style={{ background: 'var(--surface)', borderRadius: 10, padding: 14, marginTop: 12 }}>
-            <p className="text-muted text-xs" style={{ textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-              {board.length} {board.length === 1 ? 'player' : 'players'} in your league
-            </p>
-            {board.map((entry) => (
-              <div key={entry.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0' }}>
-                <div className="avatar" style={{ background: avatarColor(entry.name), width: 32, height: 32, fontSize: 12 }}>
-                  {initials(entry.name)}
-                </div>
-                <span style={{ fontWeight: 600, fontSize: 14 }}>
-                  {entry.name}{entry.id === user?.id ? ' 👈' : ''}
-                </span>
-              </div>
-            ))}
+        </div>
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', fontWeight: 700, fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            {board.length} {board.length === 1 ? 'player' : 'players'} in your league
           </div>
+          {board.map((entry, i) => (
+            <div
+              key={entry.id}
+              className={entry.id === user?.id ? 'rank-me' : ''}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '12px 16px',
+                borderTop: i > 0 ? '1px solid var(--border)' : 'none',
+              }}
+            >
+              <span style={{ width: 24, fontWeight: 700, fontSize: 14, color: 'var(--text-muted)', textAlign: 'center' }}>
+                #{i + 1}
+              </span>
+              <div className="avatar" style={{ background: avatarColor(entry.name), width: 36, height: 36, fontSize: 13 }}>
+                {initials(entry.name)}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>
+                  {entry.name}{entry.id === user?.id ? ' 👈' : ''}
+                </div>
+                <div className="text-xs text-muted">0 perfect ⭐</div>
+              </div>
+              <div style={{ fontWeight: 800, fontSize: 17, color: 'var(--text-muted)' }}>0</div>
+            </div>
+          ))}
         </div>
       </div>
     );

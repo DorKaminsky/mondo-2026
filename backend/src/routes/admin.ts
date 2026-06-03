@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import Joi from 'joi';
 import { query } from '../db/pool';
 import { authenticate, requireAdmin } from '../middleware/auth';
-import { calculateMatchScores } from '../services/scoring';
+import { calculateMatchScores, calculatePreTournamentScores } from '../services/scoring';
 
 export const adminRouter = Router();
 adminRouter.use(authenticate, requireAdmin);
@@ -159,4 +159,81 @@ adminRouter.get('/dashboard', async (req: Request, res: Response) => {
     matches: matchesRes.rows[0],
     leagues: leaguesRes.rows[0],
   });
+});
+
+// ── Pre-tournament Result Entry ─────────────────────────────────────────────
+// Admin enters the actual tournament outcomes; backend scores all
+// pre-tournament predictions (winner 16 / runner-up 8 / top scorer name 12 /
+// top assister name 12 / each group winner 4 / each group runner-up 4).
+
+const GROUPS = ['a','b','c','d','e','f','g','h','i','j','k','l'];
+const groupSchema = Joi.object(
+  Object.fromEntries(GROUPS.flatMap(g => [
+    [`group_${g}_first`, Joi.string().allow('', null)],
+    [`group_${g}_second`, Joi.string().allow('', null)],
+  ]))
+);
+
+const preTournamentResultSchema = Joi.object({
+  winner_team: Joi.string().allow('', null),
+  runner_up_team: Joi.string().allow('', null),
+  top_scorer_name: Joi.string().allow('', null),
+  top_assister_name: Joi.string().allow('', null),
+  groups: groupSchema.required(),
+});
+
+// GET — fetch saved actuals (so admin can edit/correct them)
+adminRouter.get('/pre-tournament-results', async (_req: Request, res: Response) => {
+  const { rows } = await query<{ key: string; value: string }>(
+    `SELECT key, value FROM system_settings WHERE key LIKE 'pt_actual_%'`
+  );
+  const settings: Record<string, string> = {};
+  for (const r of rows) settings[r.key] = r.value;
+  res.json({ actuals: settings });
+});
+
+// PUT — save actuals AND trigger scoring
+adminRouter.put('/pre-tournament-results', async (req: Request, res: Response) => {
+  const { error, value } = preTournamentResultSchema.validate(req.body);
+  if (error) { res.status(400).json({ error: error.details[0].message }); return; }
+
+  // Persist each as a system_setting so admin can revisit
+  const flat: Record<string, string> = {
+    pt_actual_winner: value.winner_team ?? '',
+    pt_actual_runner_up: value.runner_up_team ?? '',
+    pt_actual_top_scorer: value.top_scorer_name ?? '',
+    pt_actual_top_assister: value.top_assister_name ?? '',
+  };
+  for (const g of GROUPS) {
+    flat[`pt_actual_group_${g}_first`] = value.groups[`group_${g}_first`] ?? '';
+    flat[`pt_actual_group_${g}_second`] = value.groups[`group_${g}_second`] ?? '';
+  }
+  for (const [key, v] of Object.entries(flat)) {
+    await query(
+      `INSERT INTO system_settings (key, value, updated_at) VALUES ($1, $2, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
+      [key, v]
+    );
+  }
+
+  // Mark all in-flight pre-tournament predictions as final, then score them
+  await query(`UPDATE pre_tournament_predictions SET is_final = true`);
+
+  const groupResults: Record<string, { first: string; second: string }> = {};
+  for (const g of GROUPS) {
+    groupResults[g] = {
+      first: value.groups[`group_${g}_first`] ?? '',
+      second: value.groups[`group_${g}_second`] ?? '',
+    };
+  }
+
+  await calculatePreTournamentScores(
+    value.winner_team ?? '',
+    value.runner_up_team ?? '',
+    value.top_scorer_name ?? '',
+    value.top_assister_name ?? '',
+    groupResults
+  );
+
+  res.json({ message: 'Pre-tournament results saved and scored' });
 });

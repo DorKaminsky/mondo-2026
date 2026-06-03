@@ -70,13 +70,51 @@ export async function calculateMatchScores(matchId: number): Promise<void> {
 
   if (match.home_score === null || match.away_score === null || match.status !== 'finished') return;
 
+  // Auto-fill default predictions for any players who didn't predict.
+  // Safety net in case the 5-min cron didn't fire (e.g. backend was down,
+  // or admin entered the result long after kickoff). Default = 0-0 draw,
+  // is_default=true, scored at 1pt/correct.
+  await query(
+    `INSERT INTO match_predictions
+       (user_id, match_id, prediction_result, team_a_goals, team_b_goals, first_scorer, goal_difference, is_default)
+     SELECT u.id, $1, 'draw', 0, 0, 'none', 0, true
+       FROM users u
+       LEFT JOIN match_predictions mp ON mp.user_id = u.id AND mp.match_id = $1
+      WHERE u.role = 'player' AND mp.id IS NULL
+     ON CONFLICT DO NOTHING`,
+    [matchId]
+  );
+
   const { rows: predictions } = await query<MatchPrediction>(
     'SELECT * FROM match_predictions WHERE match_id = $1', [matchId]
   );
 
+  // Idempotency: if this match was scored before, undo prior points first
+  // so re-scoring (e.g. admin corrected the score) doesn't double-count.
   const client = await getClient();
   try {
     await client.query('BEGIN');
+
+    // Reverse previously-applied points for this match (if any)
+    const { rows: prior } = await client.query<MatchPrediction>(
+      'SELECT * FROM match_predictions WHERE match_id = $1 AND points_earned IS NOT NULL',
+      [matchId]
+    );
+    if (prior.length > 0) {
+      const priorPointsColumn = isKnockout(match.round) ? 'knockout_points' : 'group_stage_points';
+      for (const p of prior) {
+        const wasPerfect = p.points_earned === (p.is_default ? 5 : (isKnockout(match.round) ? 15 : 10))
+                          && !(p.is_default && match.home_score === 0 && match.away_score === 0);
+        await client.query(
+          `UPDATE scores SET
+             ${priorPointsColumn} = GREATEST(0, ${priorPointsColumn} - $1),
+             total_points = GREATEST(0, total_points - $1),
+             perfect_matches_count = GREATEST(0, perfect_matches_count - $2)
+           WHERE user_id = $3`,
+          [p.points_earned ?? 0, wasPerfect ? 1 : 0, p.user_id]
+        );
+      }
+    }
 
     for (const pred of predictions) {
       const { points, isPerfect } = scorePrediction(pred, match);

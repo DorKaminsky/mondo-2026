@@ -93,4 +93,13 @@ export const adminApi = {
   users: () => api.get<{ users: User[] }>('/admin/users').then(r => r.data.users),
   settings: () => api.get<{ settings: Record<string, string> }>('/admin/settings').then(r => r.data.settings),
   updateSettings: (settings: Record<string, string>) => api.put('/admin/settings', settings),
+  preTournamentResults: () =>
+    api.get<{ actuals: Record<string, string> }>('/admin/pre-tournament-results').then(r => r.data.actuals),
+  setPreTournamentResults: (data: {
+    winner_team: string;
+    runner_up_team: string;
+    top_scorer_name: string;
+    top_assister_name: string;
+    groups: Record<string, string>;
+  }) => api.put('/admin/pre-tournament-results', data),
 };

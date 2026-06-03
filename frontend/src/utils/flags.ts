@@ -65,8 +65,35 @@ export const TEAM_FLAGS: Record<string, string> = {
   'Algeria': '🇩🇿',
 };
 
+// Aliases — handles different naming conventions across data sources
+const TEAM_ALIASES: Record<string, string> = {
+  'Iran': 'IR Iran',
+  'IR Iran': 'IR Iran',
+  'South Korea': 'Korea Republic',
+  'Korea': 'Korea Republic',
+  'Republic of Korea': 'Korea Republic',
+  'Turkey': 'Türkiye',
+  'Türkiye': 'Türkiye',
+  'Cape Verde': 'Cabo Verde',
+  'Cabo Verde': 'Cabo Verde',
+  'Ivory Coast': "Côte d'Ivoire",
+  "Côte d'Ivoire": "Côte d'Ivoire",
+  'Czech Republic': 'Czechia',
+  'Czechia': 'Czechia',
+  'DR Congo': 'Congo DR',
+  'Democratic Republic of the Congo': 'Congo DR',
+  'Congo DR': 'Congo DR',
+  'Bosnia': 'Bosnia and Herzegovina',
+  'Bosnia and Herzegovina': 'Bosnia and Herzegovina',
+};
+
+function canonicalize(team: string): string {
+  return TEAM_ALIASES[team] ?? team;
+}
+
 export function flag(team: string): string {
-  return TEAM_FLAGS[team] ?? '🏳️';
+  const t = canonicalize(team);
+  return TEAM_FLAGS[t] ?? '🏳️';
 }
 
 /** Dominant color per nation for the color bar under the flag */
@@ -138,7 +165,7 @@ export const TEAM_COLORS: Record<string, string> = {
 };
 
 export function teamColor(team: string): string {
-  return TEAM_COLORS[team] ?? '#862633';
+  return TEAM_COLORS[canonicalize(team)] ?? '#1f6a3a';
 }
 
 // ── Avatar palette ──────────────────────────────────────────────────────────

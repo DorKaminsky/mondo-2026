@@ -15,6 +15,7 @@ import { AdminMatches } from './pages/admin/AdminMatches';
 import { AdminUsers } from './pages/admin/AdminUsers';
 import { AdminSettings } from './pages/admin/AdminSettings';
 import { AdminLeagues } from './pages/admin/AdminLeagues';
+import { AdminPreTournament } from './pages/admin/AdminPreTournament';
 import { RulesPage } from './pages/RulesPage';
 
 function AppRoutes() {
@@ -36,6 +37,7 @@ function AppRoutes() {
         <Route path="/admin/users" element={<AdminRoute><AdminUsers /></AdminRoute>} />
         <Route path="/admin/settings" element={<AdminRoute><AdminSettings /></AdminRoute>} />
         <Route path="/admin/leagues" element={<SuperAdminRoute><AdminLeagues /></SuperAdminRoute>} />
+        <Route path="/admin/pre-tournament" element={<AdminRoute><AdminPreTournament /></AdminRoute>} />
         <Route path="/rules" element={<RulesPage />} />
       </Routes>
       {user && <BottomNav />}

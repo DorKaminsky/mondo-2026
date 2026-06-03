@@ -3,16 +3,23 @@ import { format, subHours, formatDistanceToNow } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { matchesApi, leaderboardApi, predictionsApi } from '../api';
 import { useAuth } from '../contexts/AuthContext';
-import { Match } from '../types';
+import { Match, MatchPrediction } from '../types';
 import { flag, teamColor, avatarColor, localTimezoneLabel } from '../utils/flags';
 import { InstallPrompt } from '../components/InstallPrompt';
 
-function MatchCard({ match, compact }: { match: Match; compact?: boolean }) {
+function MatchCard({ match, compact, myPrediction }: { match: Match; compact?: boolean; myPrediction?: MatchPrediction }) {
   const homeClr = teamColor(match.home_team);
   const awayClr = teamColor(match.away_team);
   const isLive = match.status === 'live';
+  const isFinished = match.status === 'finished';
+  const hasMyPred = !!myPrediction && !myPrediction.is_default;
+
   return (
-    <div className="card" style={{ padding: 0, overflow: 'hidden', borderLeft: isLive ? '3px solid var(--red)' : undefined }}>
+    <div className="card" style={{
+      padding: 0,
+      overflow: 'hidden',
+      borderLeft: isLive ? '3px solid var(--red)' : hasMyPred ? '3px solid var(--primary)' : undefined,
+    }}>
       <div style={{ display: 'flex', height: 4 }}>
         <div style={{ flex: 1, background: homeClr }} />
         <div style={{ flex: 1, background: awayClr }} />
@@ -38,7 +45,7 @@ function MatchCard({ match, compact }: { match: Match; compact?: boolean }) {
             <span className="flag-wave" style={{ fontSize: compact ? 18 : 22 }}>{flag(match.home_team)}</span>
             <span style={{ fontWeight: 700, fontSize: compact ? 13 : 14 }}>{match.home_team}</span>
           </div>
-          {isLive || match.status === 'finished' ? (
+          {isLive || isFinished ? (
             <div style={{ fontWeight: 900, fontSize: 22, color: 'var(--primary)', letterSpacing: 2, padding: '0 8px', textAlign: 'center' }}>
               {match.home_score ?? 0}–{match.away_score ?? 0}
             </div>
@@ -50,6 +57,54 @@ function MatchCard({ match, compact }: { match: Match; compact?: boolean }) {
             <span className="flag-wave-reverse" style={{ fontSize: compact ? 18 : 22 }}>{flag(match.away_team)}</span>
           </div>
         </div>
+
+        {/* My prediction badge — clear visual that user has predicted */}
+        {hasMyPred && (
+          <div style={{
+            marginTop: 10,
+            padding: '6px 10px',
+            background: 'rgba(31, 106, 58, 0.1)',
+            border: '1px solid rgba(31, 106, 58, 0.3)',
+            borderRadius: 8,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+          }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)' }}>
+              ✓ You predicted: <span style={{ fontWeight: 900 }}>{myPrediction!.team_a_goals}–{myPrediction!.team_b_goals}</span>
+            </span>
+            {isFinished && myPrediction!.points_earned != null && (
+              <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--primary)' }}>
+                +{myPrediction!.points_earned} pts
+              </span>
+            )}
+            {!isFinished && !isLive && (
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>
+                Tap to edit
+              </span>
+            )}
+          </div>
+        )}
+        {!hasMyPred && !isFinished && !isLive && (
+          <div style={{
+            marginTop: 10,
+            padding: '6px 10px',
+            background: 'rgba(232, 160, 32, 0.15)',
+            border: '1px dashed rgba(232, 160, 32, 0.5)',
+            borderRadius: 8,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-dark)' }}>
+              ⚠️ Not predicted yet
+            </span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-dark)' }}>
+              Tap to predict →
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -141,6 +196,8 @@ export function HomePage() {
   const predictedNonDefaultIds = new Set(
     (myPredictions ?? []).filter(p => !p.is_default).map(p => p.match_id)
   );
+  // Map of match_id → prediction for inline display on cards
+  const predByMatchId = new Map((myPredictions ?? []).map(p => [p.match_id, p]));
   const unpredictedCount = (upcoming ?? []).filter(m => {
     if (predictedNonDefaultIds.has(m.id)) return false;
     return new Date() < subHours(new Date(m.kickoff_time_utc), 1); // deadline not passed
@@ -288,7 +345,7 @@ export function HomePage() {
           <p className="section-header">🔴 Live Now</p>
           {live.map(m => (
             <Link key={m.id} to={`/predict/${m.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
-              <MatchCard match={m} />
+              <MatchCard match={m} myPrediction={predByMatchId.get(m.id)} />
             </Link>
           ))}
         </section>
@@ -299,7 +356,7 @@ export function HomePage() {
         <section style={{ marginBottom: 20 }}>
           <p className="section-header">⏰ Next Match</p>
           <Link to={`/predict/${nextMatch.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-            <MatchCard match={nextMatch} />
+            <MatchCard match={nextMatch} myPrediction={predByMatchId.get(nextMatch.id)} />
           </Link>
           {!deadlinePassed && (
             <div style={{
@@ -328,7 +385,7 @@ export function HomePage() {
           <p className="section-header">📅 Coming Up</p>
           {upcoming.slice(1, 4).map(m => (
             <Link key={m.id} to={`/predict/${m.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
-              <MatchCard match={m} compact />
+              <MatchCard match={m} compact myPrediction={predByMatchId.get(m.id)} />
             </Link>
           ))}
           <Link to="/predict" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.8)', fontWeight: 700, fontSize: 14, padding: '10px 0', textDecoration: 'none' }}>
