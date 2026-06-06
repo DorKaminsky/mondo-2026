@@ -19,8 +19,13 @@ app.use(cors({ origin: config.nodeEnv === 'production' ? process.env.FRONTEND_UR
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200 });
-const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 });
+// Rate limits keyed by IP. Defaults are calibrated for a friend group:
+//  - Global 1000/15min: covers a 20-user league refreshing leaderboards on game day,
+//    plus a few people on a shared WiFi/CGNAT.
+//  - Auth 60/15min: enough for a household of friends signing up together,
+//    still tight enough to slow down credential-stuffing.
+const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 1000 });
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 60 });
 
 app.use('/api', limiter);
 app.use('/api/auth', authLimiter);
