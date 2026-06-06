@@ -76,10 +76,23 @@ export function PreTournamentPage() {
   }, [existing]);
 
   const save = useMutation({
-    mutationFn: () => preTournamentApi.save({ ...form }),
+    mutationFn: () => {
+      // Send only the fields the backend accepts. The `existing` object from the
+      // server includes DB metadata (id, user_id, submitted_at, is_final) that
+      // Joi will reject with "id is not allowed" if we forward them.
+      const allowedKeys: (keyof FormData)[] = [
+        'winner_team', 'runner_up_team',
+        'top_scorer_name', 'top_assister_name',
+        ...GROUPS.flatMap(g => [`group_${g.key}_first`, `group_${g.key}_second`] as (keyof FormData)[]),
+      ];
+      const payload: Record<string, unknown> = {};
+      for (const k of allowedKeys) payload[k as string] = form[k] ?? '';
+      return preTournamentApi.save(payload);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['pre-tournament'] });
       setSaved(true);
+      setError('');
       setTimeout(() => setSaved(false), 2000);
     },
     onError: (err: unknown) => {

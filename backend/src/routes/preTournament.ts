@@ -39,7 +39,10 @@ preTournamentRouter.get('/', authenticate, async (req: Request, res: Response) =
 });
 
 preTournamentRouter.put('/', authenticate, async (req: Request, res: Response) => {
-  const { error, value } = predictionSchema.validate(req.body);
+  // stripUnknown: silently drop DB metadata fields (id, user_id, submitted_at,
+  // is_final) that the frontend may forward when re-submitting an existing
+  // prediction. Without this, Joi rejects with "id is not allowed".
+  const { error, value } = predictionSchema.validate(req.body, { stripUnknown: true });
   if (error) { res.status(400).json({ error: error.details[0].message }); return; }
 
   const userId = req.user!.id;
