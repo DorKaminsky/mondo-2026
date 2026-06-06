@@ -1,31 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { preTournamentApi } from '../api';
+import { preTournamentApi, matchesApi } from '../api';
 import { PreTournamentPrediction } from '../types';
 
-const ALL_TEAMS = [
-  'Argentina', 'Australia', 'Austria', 'Belgium', 'Brazil', 'Cameroon', 'Canada', 'Chile',
-  'China', 'Colombia', 'Costa Rica', 'Croatia', 'Cuba', 'Denmark', 'Ecuador', 'Egypt',
-  'England', 'France', 'Germany', 'Ghana', 'Honduras', 'Iran', 'Ivory Coast', 'Japan',
-  'Mexico', 'Morocco', 'Netherlands', 'New Zealand', 'Nigeria', 'Panama', 'Paraguay',
-  'Poland', 'Portugal', 'Saudi Arabia', 'Scotland', 'Senegal', 'Serbia', 'South Korea',
-  'Spain', 'Switzerland', 'Turkey', 'Uruguay', 'USA', 'Venezuela',
-  'Algeria', 'Croatia', 'Austria', 'Denmark',
-];
-
-const GROUPS: { label: string; key: string; teams: string[] }[] = [
-  { label: 'A', key: 'a', teams: ['Mexico', 'USA', 'Canada', 'Morocco'] },
-  { label: 'B', key: 'b', teams: ['Brazil', 'Argentina', 'Australia', 'Saudi Arabia'] },
-  { label: 'C', key: 'c', teams: ['France', 'England', 'Senegal', 'Ecuador'] },
-  { label: 'D', key: 'd', teams: ['Spain', 'Germany', 'Japan', 'Costa Rica'] },
-  { label: 'E', key: 'e', teams: ['Portugal', 'Netherlands', 'Iran', 'Ghana'] },
-  { label: 'F', key: 'f', teams: ['Italy', 'Belgium', 'Cameroon', 'Serbia'] },
-  { label: 'G', key: 'g', teams: ['Colombia', 'South Korea', 'Poland', 'Egypt'] },
-  { label: 'H', key: 'h', teams: ['Switzerland', 'Turkey', 'Ivory Coast', 'Honduras'] },
-  { label: 'I', key: 'i', teams: ['Uruguay', 'Chile', 'Nigeria', 'Ivory Coast'] },
-  { label: 'J', key: 'j', teams: ['Croatia', 'Algeria', 'Venezuela', 'Cameroon'] },
-  { label: 'K', key: 'k', teams: ['Denmark', 'Scotland', 'China', 'New Zealand'] },
-  { label: 'L', key: 'l', teams: ['Austria', 'Paraguay', 'Panama', 'Cuba'] },
+// 12 group labels A..L. Team membership is derived from the matches API at
+// runtime so the pre-tournament page always reflects the real WC2026 draw
+// (no hardcoded — and previously wrong — group assignments).
+const GROUP_KEYS: { label: string; key: string }[] = [
+  { label: 'A', key: 'a' }, { label: 'B', key: 'b' }, { label: 'C', key: 'c' },
+  { label: 'D', key: 'd' }, { label: 'E', key: 'e' }, { label: 'F', key: 'f' },
+  { label: 'G', key: 'g' }, { label: 'H', key: 'h' }, { label: 'I', key: 'i' },
+  { label: 'J', key: 'j' }, { label: 'K', key: 'k' }, { label: 'L', key: 'l' },
 ];
 
 type FormData = Partial<PreTournamentPrediction>;
@@ -50,6 +35,30 @@ export function PreTournamentPage() {
     queryKey: ['pre-tournament'],
     queryFn: preTournamentApi.get,
   });
+
+  // Derive groups + the global team list from the matches table —
+  // the canonical source of truth for the WC2026 draw.
+  const { data: matches } = useQuery({ queryKey: ['matches'], queryFn: matchesApi.all });
+
+  const GROUPS = useMemo(() => {
+    if (!matches) return GROUP_KEYS.map(g => ({ ...g, teams: [] as string[] }));
+    return GROUP_KEYS.map(g => {
+      const teams = new Set<string>();
+      for (const m of matches) {
+        if (m.round !== 'group' || m.group_name !== g.key) continue;
+        // Skip TBD placeholders (shouldn't happen for group stage but be safe)
+        if (!m.home_team.startsWith('TBD')) teams.add(m.home_team);
+        if (!m.away_team.startsWith('TBD')) teams.add(m.away_team);
+      }
+      return { ...g, teams: [...teams].sort() };
+    });
+  }, [matches]);
+
+  const ALL_TEAMS = useMemo(() => {
+    const all = new Set<string>();
+    for (const g of GROUPS) for (const t of g.teams) all.add(t);
+    return [...all].sort();
+  }, [GROUPS]);
 
   const emptyForm: FormData = {
     winner_team: '', runner_up_team: '',

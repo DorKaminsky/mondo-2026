@@ -1,18 +1,9 @@
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect, useMemo, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { adminApi } from '../../api';
+import { adminApi, matchesApi } from '../../api';
 
-const ALL_TEAMS = [
-  'Algeria','Argentina','Australia','Austria','Belgium','Bosnia and Herzegovina','Brazil','Cabo Verde',
-  'Canada','Colombia','Congo DR','Croatia','Curaçao','Czechia',"Côte d'Ivoire",'Ecuador','Egypt',
-  'England','France','Germany','Ghana','Haiti','IR Iran','Iraq','Japan','Jordan','Korea Republic',
-  'Mexico','Morocco','Netherlands','New Zealand','Norway','Panama','Paraguay','Portugal','Qatar',
-  'Saudi Arabia','Scotland','Senegal','South Africa','Spain','Sweden','Switzerland','Tunisia',
-  'Türkiye','USA','Uruguay','Uzbekistan',
-];
-
-const GROUPS: { label: string; key: string }[] = [
+const GROUP_KEYS: { label: string; key: string }[] = [
   { label: 'A', key: 'a' }, { label: 'B', key: 'b' }, { label: 'C', key: 'c' },
   { label: 'D', key: 'd' }, { label: 'E', key: 'e' }, { label: 'F', key: 'f' },
   { label: 'G', key: 'g' }, { label: 'H', key: 'h' }, { label: 'I', key: 'i' },
@@ -26,6 +17,26 @@ export function AdminPreTournament() {
     queryKey: ['admin-pre-tournament-results'],
     queryFn: adminApi.preTournamentResults,
   });
+
+  // Derive groups + all-teams from real fixture data — no hardcoded lists
+  const { data: matches } = useQuery({ queryKey: ['matches'], queryFn: matchesApi.all });
+  const GROUPS = useMemo(() => {
+    if (!matches) return GROUP_KEYS.map(g => ({ ...g, teams: [] as string[] }));
+    return GROUP_KEYS.map(g => {
+      const teams = new Set<string>();
+      for (const m of matches) {
+        if (m.round !== 'group' || m.group_name !== g.key) continue;
+        if (!m.home_team.startsWith('TBD')) teams.add(m.home_team);
+        if (!m.away_team.startsWith('TBD')) teams.add(m.away_team);
+      }
+      return { ...g, teams: [...teams].sort() };
+    });
+  }, [matches]);
+  const ALL_TEAMS = useMemo(() => {
+    const all = new Set<string>();
+    for (const g of GROUPS) for (const t of g.teams) all.add(t);
+    return [...all].sort();
+  }, [GROUPS]);
 
   const [form, setForm] = useState({
     winner_team: '',
@@ -131,7 +142,10 @@ export function AdminPreTournament() {
 
         {GROUPS.map(g => (
           <div key={g.key} className="card">
-            <h3 style={{ marginBottom: 12, fontSize: 14 }}>Group {g.label}</h3>
+            <h3 style={{ marginBottom: 8, fontSize: 14 }}>Group {g.label}</h3>
+            <p className="text-muted text-xs" style={{ marginBottom: 10 }}>
+              Teams: {g.teams.join(', ')}
+            </p>
             <div className="form-group">
               <label>1st Place <span className="badge badge-blue">4 pts</span></label>
               <select
@@ -139,7 +153,7 @@ export function AdminPreTournament() {
                 onChange={e => setForm(f => ({ ...f, groups: { ...f.groups, [`group_${g.key}_first`]: e.target.value } }))}
               >
                 <option value="">— Select team —</option>
-                {ALL_TEAMS.map(t => <option key={t} value={t}>{t}</option>)}
+                {g.teams.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
             <div className="form-group">
@@ -149,7 +163,7 @@ export function AdminPreTournament() {
                 onChange={e => setForm(f => ({ ...f, groups: { ...f.groups, [`group_${g.key}_second`]: e.target.value } }))}
               >
                 <option value="">— Select team —</option>
-                {ALL_TEAMS.map(t => <option key={t} value={t}>{t}</option>)}
+                {g.teams.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
           </div>
