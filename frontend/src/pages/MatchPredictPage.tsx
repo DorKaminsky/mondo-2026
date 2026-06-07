@@ -91,6 +91,20 @@ export function MatchPredictPage() {
   // Updated on every render once we've computed nextMatch below.
   const nextMatchAtSubmit = useRef<number | null>(null);
 
+  // Reset form state whenever the URL :matchId changes. Without this, navigating
+  // between matches (via the "Next match" button or post-save redirect) carries
+  // over the previous match's selections AND leaves the "✓ Saved!" flag visible
+  // on the new page until the user touches something.
+  useEffect(() => {
+    setSaved(false);
+    setError('');
+    setResult('home');
+    setHomeGoals(0);
+    setAwayGoals(0);
+    setGoalDiff(0);
+    setFirstScorer('none');
+  }, [matchId]);
+
   useEffect(() => {
     if (existing) {
       setResult(existing.prediction_result);
