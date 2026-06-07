@@ -5,6 +5,24 @@
 
 ---
 
+## 🤐 PRIVACY: don't surface other players' predictions to Dor unless asked
+
+Dor (super_admin) has DB access and could SELECT any user's predictions himself. But surfacing them in conversation by default poisons the league dynamic — Dor becomes a player who's seen everyone's bets while pretending he hasn't.
+
+**Default behavior:**
+- ✅ Aggregate / anonymized stats are fine ("12 users signed up", "5 of 12 filled pre-tournament", "Israel and Guy Maoz haven't placed any real predictions yet")
+- ✅ Per-user activity flags WITHOUT contents ("Gal has filled pre-tournament", "Oren has 1 real prediction across 5 matches")
+- ❌ DO NOT show specific picks: "Gal picked Argentina to win", "Israel predicted 2-1 for Mexico vs South Africa", "Yoav's top scorer pick is Mbappé"
+- ❌ DO NOT show pre-tournament picks for any player including in summaries ("4 of 5 picked France" — even aggregate-but-revealing breakdowns betray individual choices when the league is small)
+
+**When Dor explicitly asks** ("show me Gal's predictions", "what did everyone pick for top scorer", "compare Yoav and Itay's group A picks"), THEN show the specific data. The point is the default should be opaque, not the ceiling.
+
+**A useful test before printing any prediction content:** "Would Dor know this if he were just another player using the app?" If no, don't volunteer it.
+
+This rule extends to Claude Code sessions, future agents, and any `SELECT` from `match_predictions` or `pre_tournament_predictions` whose results would be paraphrased back to the user.
+
+---
+
 ## 🚨 PRODUCTION IS LIVE — TREAT THE DB AS SACRED
 
 The Neon Postgres at `ep-wandering-mountain-alhkssrj` holds:
