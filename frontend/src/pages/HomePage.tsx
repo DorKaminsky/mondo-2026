@@ -328,7 +328,7 @@ export function HomePage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700 }}>
-                ⚡ You haven't predicted {unpredictedCount} upcoming {unpredictedCount === 1 ? 'match' : 'matches'}
+                ⚡ {unpredictedCount} of the next 10 {unpredictedCount === 1 ? 'match still needs' : 'matches still need'} a prediction
               </div>
               <div style={{ fontSize: 11, opacity: 0.8, marginTop: 2 }}>
                 Tap to predict before deadlines lock in

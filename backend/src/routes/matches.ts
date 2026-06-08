@@ -13,11 +13,14 @@ matchesRouter.get('/', authenticate, async (_req: Request, res: Response) => {
 });
 
 matchesRouter.get('/upcoming', authenticate, async (_req: Request, res: Response) => {
+  // Returns the NEXT 10 not-yet-finished matches by kickoff time.
+  // 10 is intentional: keeps Home page + "you haven't predicted X" banner
+  // bounded to a sensible near-horizon. For full schedule, use GET /matches.
   const { rows } = await query<Match>(
     `SELECT * FROM matches
      WHERE status != 'finished'
      ORDER BY kickoff_time_utc ASC
-     LIMIT 20`
+     LIMIT 10`
   );
   res.json({ matches: rows });
 });
