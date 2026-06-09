@@ -175,13 +175,24 @@ export function HomePage() {
   const deadlinePassed = nextDeadline ? new Date() > nextDeadline : false;
   const hasPredictedNext = myPredictions?.some(p => p.match_id === nextMatch?.id && !p.is_default);
 
-  // Group opinion: only show after the betting deadline has passed for that match
+  // Group opinion: only show after the betting deadline has passed.
+  // Backend /stats already filters out future matches (server is the source
+  // of truth), but we double-check on the client too — defense in depth so a
+  // backend regression can't accidentally leak in-flight votes.
   const upcomingById = new Map((upcoming ?? []).map(m => [m.id, m]));
   const opinionStats: VoteStats[] = (groupStats?.popularPredictions ?? [])
     .filter((s: VoteStats) => {
       if (Number(s.total_predictions) === 0) return false;
       const match = upcomingById.get(s.match_id);
-      if (!match) return true; // finished/live — deadline definitely passed
+      // If we don't have the match in the small upcoming list, the safest
+      // assumption is "we can't verify the deadline" → don't show.
+      // Backend already filtered to deadline-passed matches, so any match
+      // we have client-side info for AND whose deadline has passed is OK.
+      if (!match) {
+        // Not in upcoming → must be finished/live (backend already verified
+        // deadline passed before returning it). Trust the server here.
+        return true;
+      }
       return new Date() > subHours(new Date(match.kickoff_time_utc), 1);
     })
     .slice(0, 3);

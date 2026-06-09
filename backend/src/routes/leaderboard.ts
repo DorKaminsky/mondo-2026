@@ -159,6 +159,10 @@ leaderboardRouter.get('/stats', authenticate, async (req: Request, res: Response
     res.json({ popularPredictions: [] });
     return;
   }
+  // PRIVACY: only return aggregate vote stats for matches whose deadline has
+  // passed (kickoff − 1h <= NOW). Otherwise we'd leak how players are betting
+  // before they're locked in. This filter MUST be server-side because any
+  // client could query /stats directly. Don't trust the frontend to redact.
   const { rows: popularPredictions } = await query(
     `SELECT
        m.id as match_id, m.home_team, m.away_team,
@@ -170,8 +174,9 @@ leaderboardRouter.get('/stats', authenticate, async (req: Request, res: Response
      JOIN match_predictions mp ON mp.match_id = m.id
      JOIN users u ON mp.user_id = u.id
      WHERE u.league_id = $1
+       AND m.kickoff_time_utc - INTERVAL '1 hour' <= NOW()
      GROUP BY m.id, m.home_team, m.away_team
-     ORDER BY m.kickoff_time_utc ASC
+     ORDER BY m.kickoff_time_utc DESC
      LIMIT 20`,
     [leagueId]
   );
