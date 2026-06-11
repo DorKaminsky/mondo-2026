@@ -17,12 +17,17 @@ function predictionStatus(match: Match, pred?: MatchPrediction) {
   const secsToDeadline = (deadline.getTime() - now.getTime()) / 1000;
 
   if (match.status === 'finished') return 'finished';
-  if (now > deadline) return 'expired';
+  // Order matters: check if user actually submitted BEFORE marking expired,
+  // so a deadline-passed match with a real prediction shows 'submitted',
+  // not 'expired/Default applied'.
+  if (pred && !pred.is_default) return 'submitted';
+  if (now > deadline) return 'expired'; // no real pred AND deadline gone → defaulted
   if (!pred) {
     if (secsToDeadline < 3600) return 'urgent';
     if (secsToDeadline < 86400) return 'warning';
     return 'upcoming';
   }
+  // pred exists but is_default true and deadline still ahead — still editable
   return 'submitted';
 }
 

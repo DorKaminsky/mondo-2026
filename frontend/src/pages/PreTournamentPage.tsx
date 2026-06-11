@@ -103,17 +103,32 @@ export function PreTournamentPage() {
 
   const set = (key: keyof FormData) => (value: string) => setForm(f => ({ ...f, [key]: value }));
 
+  // Deadline mirrors the value in system_settings (pre_tournament_deadline).
+  // Server enforces this independently — this is just for UX (show locked banner,
+  // disable inputs). If you change the server deadline, update this constant too.
+  const PT_DEADLINE = new Date('2026-06-11T13:00:00Z');
+  const isLocked = new Date() > PT_DEADLINE;
+
   if (isLoading) return <div className="loading"><div className="spinner" /></div>;
 
   return (
     <div className="page">
       <h1 style={{ fontSize: 20, marginBottom: 4 }}>Pre-Tournament Predictions</h1>
       <p className="text-muted text-sm" style={{ marginBottom: 16 }}>
-        Deadline: June 11, 2026 at 14:00 — freely editable until then
+        {isLocked
+          ? '🔒 Locked — deadline passed at June 11, 2026 16:00 IDT. Picks below are read-only.'
+          : 'Deadline: June 11, 2026 at 16:00 IDT — freely editable until then'}
       </p>
+
+      {isLocked && (
+        <div className="alert alert-warning" style={{ marginBottom: 14 }}>
+          🔒 Pre-tournament predictions are <b>locked</b>. Your final picks are shown below — they will be scored after the tournament.
+        </div>
+      )}
 
       {error && <div className="alert alert-danger">{error}</div>}
 
+      <fieldset disabled={isLocked} style={{ border: 'none', padding: 0, margin: 0, opacity: isLocked ? 0.7 : 1 }}>
       <div className="card">
         <h3 style={{ marginBottom: 16 }}>Tournament Winner & Runner-up</h3>
         <TeamSelect label="Tournament Winner" value={form.winner_team ?? ''} onChange={set('winner_team')} teams={ALL_TEAMS} pts="16 pts" />
@@ -167,9 +182,10 @@ export function PreTournamentPage() {
           onClick={() => save.mutate()}
           disabled={save.isPending}
         >
-          {save.isPending ? 'Saving...' : saved ? '✓ Saved!' : 'Save Predictions'}
+          {save.isPending ? 'Saving...' : saved ? '✓ Saved!' : isLocked ? '🔒 Locked' : 'Save Predictions'}
         </button>
       </div>
+      </fieldset>
     </div>
   );
 }
