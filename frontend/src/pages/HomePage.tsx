@@ -114,42 +114,151 @@ interface VoteStats {
   match_id: number;
   home_team: string;
   away_team: string;
+  home_score: number | null;
+  away_score: number | null;
+  status: string;
+  first_scorer_team: string | null;
+  total_predictions: number;
   home_votes: number;
   draw_votes: number;
   away_votes: number;
-  total_predictions: number;
+  fs_home: number;
+  fs_away: number;
+  fs_none: number;
+  home_goal_dist: Record<string, number> | null;
+  away_goal_dist: Record<string, number> | null;
+  diff_dist: Record<string, number> | null;
 }
 
-function VoteBar({ label, votes, total, color }: { label: string; votes: number; total: number; color: string }) {
-  const pct = total > 0 ? Math.round((Number(votes) / total) * 100) : 0;
+// Slice = one wedge of a pie. label/value/color
+interface Slice { label: string; value: number; color: string }
+
+// Generates a CSS conic-gradient string from slice values.
+function pieGradient(slices: Slice[]): string {
+  const total = slices.reduce((sum, s) => sum + s.value, 0);
+  if (total === 0) return 'conic-gradient(#e5e7eb 0deg 360deg)';
+  const stops: string[] = [];
+  let acc = 0;
+  for (const s of slices) {
+    if (s.value === 0) continue;
+    const start = (acc / total) * 360;
+    acc += s.value;
+    const end = (acc / total) * 360;
+    stops.push(`${s.color} ${start}deg ${end}deg`);
+  }
+  return `conic-gradient(${stops.join(', ')})`;
+}
+
+function PieChart({ title, slices, size = 80 }: { title: string; slices: Slice[]; size?: number }) {
+  const total = slices.reduce((sum, s) => sum + s.value, 0);
+  if (total === 0) return null;
   return (
-    <div style={{ flex: 1, minWidth: 0 }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</div>
-      <div style={{ height: 6, background: '#f0f0f0', borderRadius: 3, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 3, transition: 'width 0.6s ease' }} />
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 0, flex: '0 1 auto' }}>
+      <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 6, textAlign: 'center', whiteSpace: 'nowrap' }}>
+        {title}
       </div>
-      <div style={{ fontSize: 13, fontWeight: 800, color, marginTop: 3 }}>{pct}%</div>
+      <div style={{
+        width: size, height: size,
+        borderRadius: '50%',
+        background: pieGradient(slices),
+        boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.06)',
+      }} />
+      <div style={{ marginTop: 6, fontSize: 10, lineHeight: 1.3, textAlign: 'left', minWidth: 0 }}>
+        {slices.filter(s => s.value > 0).map(s => {
+          const pct = Math.round((s.value / total) * 100);
+          return (
+            <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+              <span style={{ width: 8, height: 8, borderRadius: 2, background: s.color, flexShrink: 0 }} />
+              <span style={{ fontWeight: 700, color: 'var(--text)' }}>{pct}%</span>
+              <span style={{ color: 'var(--text-muted)' }}>{s.label}</span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
+}
+
+// Convert a {0:5, 1:3, 2:1} dist into Slice[] sorted by key
+function distToSlices(dist: Record<string, number> | null, color: string): Slice[] {
+  if (!dist) return [];
+  const keys = Object.keys(dist).map(k => parseInt(k, 10)).sort((a, b) => a - b);
+  return keys.map(k => ({ label: String(k), value: Number(dist[String(k)]) || 0, color }));
+}
+
+// Vary brightness across goal-count slices (0=darkest, 4=lightest)
+function shadedSlices(dist: Record<string, number> | null, baseColor: string): Slice[] {
+  const slices = distToSlices(dist, baseColor);
+  // Apply a fixed 5-step gradient palette so adjacent slices are distinguishable
+  const palette = ['#1f6a3a', '#2d8f4f', '#4caf50', '#8bc34a', '#cddc39', '#fdd835', '#fb8c00', '#e53935'];
+  return slices.map((s, i) => ({ ...s, color: palette[i % palette.length] }));
 }
 
 function GroupOpinionCard({ stat }: { stat: VoteStats }) {
   const total = Number(stat.total_predictions);
   if (total === 0) return null;
+
+  const homeC = teamColor(stat.home_team);
+  const awayC = teamColor(stat.away_team);
+
+  // Winner pie
+  const winnerSlices: Slice[] = [
+    { label: stat.home_team, value: Number(stat.home_votes), color: homeC },
+    { label: 'Draw', value: Number(stat.draw_votes), color: '#6b7280' },
+    { label: stat.away_team, value: Number(stat.away_votes), color: awayC },
+  ];
+  // First scorer pie
+  const fsSlices: Slice[] = [
+    { label: stat.home_team, value: Number(stat.fs_home), color: homeC },
+    { label: stat.away_team, value: Number(stat.fs_away), color: awayC },
+    { label: 'None', value: Number(stat.fs_none), color: '#9ca3af' },
+  ];
+  const homeGoalSlices = shadedSlices(stat.home_goal_dist, homeC);
+  const awayGoalSlices = shadedSlices(stat.away_goal_dist, awayC);
+  const diffSlices = shadedSlices(stat.diff_dist, '#1f6a3a');
+
+  const isFinished = stat.status === 'finished';
+
   return (
-    <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
-      <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span>{flag(stat.home_team)}</span>
-        <span style={{ color: 'var(--text-muted)' }}>{stat.home_team}</span>
-        <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>vs</span>
-        <span style={{ color: 'var(--text-muted)' }}>{stat.away_team}</span>
-        <span>{flag(stat.away_team)}</span>
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{total} votes</span>
+    <div style={{ padding: '14px 14px', borderBottom: '1px solid var(--border)' }}>
+      {/* Header row */}
+      <div className="flex-between" style={{ marginBottom: 12, flexWrap: 'wrap', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700 }}>
+          <span style={{ fontSize: 18 }}>{flag(stat.home_team)}</span>
+          <span>{stat.home_team}</span>
+          {isFinished ? (
+            <span style={{ color: 'var(--primary)', fontWeight: 900, padding: '0 6px' }}>
+              {stat.home_score}–{stat.away_score}
+            </span>
+          ) : (
+            <span style={{ color: 'var(--text-muted)', fontSize: 11, padding: '0 4px' }}>vs</span>
+          )}
+          <span>{stat.away_team}</span>
+          <span style={{ fontSize: 18 }}>{flag(stat.away_team)}</span>
+        </div>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>{total} votes</span>
       </div>
-      <div style={{ display: 'flex', gap: 12 }}>
-        <VoteBar label={stat.home_team} votes={stat.home_votes} total={total} color={teamColor(stat.home_team)} />
-        <VoteBar label="Draw" votes={stat.draw_votes} total={total} color="#6b7280" />
-        <VoteBar label={stat.away_team} votes={stat.away_votes} total={total} color={teamColor(stat.away_team)} />
+
+      {/* Pie row 1: Winner / First scorer */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2, 1fr)',
+        gap: 12,
+        marginBottom: 14,
+      }}>
+        <PieChart title="Winner" slices={winnerSlices} size={70} />
+        <PieChart title="First Scorer" slices={fsSlices} size={70} />
+      </div>
+
+      {/* Pie row 2: Home goals / Away goals / Diff */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+        gap: 8,
+      }}>
+        <PieChart title={`${stat.home_team.slice(0, 8)} goals`} slices={homeGoalSlices} size={56} />
+        <PieChart title={`${stat.away_team.slice(0, 8)} goals`} slices={awayGoalSlices} size={56} />
+        <PieChart title="Goal diff" slices={diffSlices} size={56} />
       </div>
     </div>
   );

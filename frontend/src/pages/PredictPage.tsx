@@ -158,8 +158,16 @@ export function PredictPage() {
 
   const filtered = useMemo(() => applyFilter(matches ?? [], filter), [matches, filter]);
 
+  // Past tab: latest games at the top. Other tabs: chronological (earliest first).
+  const orderedFiltered = useMemo(() => {
+    if (filter !== 'past') return filtered;
+    return [...filtered].sort((a, b) =>
+      new Date(b.kickoff_time_utc).getTime() - new Date(a.kickoff_time_utc).getTime()
+    );
+  }, [filtered, filter]);
+
   const grouped = new Map<string, Match[]>();
-  for (const m of filtered) {
+  for (const m of orderedFiltered) {
     const day = format(new Date(m.kickoff_time_utc), 'yyyy-MM-dd');
     if (!grouped.has(day)) grouped.set(day, []);
     grouped.get(day)!.push(m);

@@ -163,21 +163,61 @@ leaderboardRouter.get('/stats', authenticate, async (req: Request, res: Response
   // passed (kickoff − 1h <= NOW). Otherwise we'd leak how players are betting
   // before they're locked in. This filter MUST be server-side because any
   // client could query /stats directly. Don't trust the frontend to redact.
+  // Returns full per-dimension distributions (winner / home goals / away goals
+  // / goal diff / first scorer) so the UI can render rich charts.
   const { rows: popularPredictions } = await query(
-    `SELECT
-       m.id as match_id, m.home_team, m.away_team,
-       COUNT(*) FILTER (WHERE mp.prediction_result = 'home') as home_votes,
-       COUNT(*) FILTER (WHERE mp.prediction_result = 'draw') as draw_votes,
-       COUNT(*) FILTER (WHERE mp.prediction_result = 'away') as away_votes,
-       COUNT(*) as total_predictions
-     FROM matches m
-     JOIN match_predictions mp ON mp.match_id = m.id
-     JOIN users u ON mp.user_id = u.id
-     WHERE u.league_id = $1
-       AND m.kickoff_time_utc - INTERVAL '1 hour' <= NOW()
-     GROUP BY m.id, m.home_team, m.away_team
+    `WITH lp AS (
+       SELECT mp.match_id, mp.prediction_result, mp.team_a_goals, mp.team_b_goals,
+              mp.first_scorer, mp.goal_difference
+         FROM match_predictions mp
+         JOIN users u ON u.id = mp.user_id
+         JOIN matches m ON m.id = mp.match_id
+        WHERE u.league_id = $1
+          AND m.kickoff_time_utc - INTERVAL '1 hour' <= NOW()
+     ),
+     home_dist AS (
+       SELECT match_id, json_object_agg(team_a_goals::text, n) AS d
+         FROM (SELECT match_id, team_a_goals, COUNT(*) AS n FROM lp GROUP BY match_id, team_a_goals) s
+        GROUP BY match_id
+     ),
+     away_dist AS (
+       SELECT match_id, json_object_agg(team_b_goals::text, n) AS d
+         FROM (SELECT match_id, team_b_goals, COUNT(*) AS n FROM lp GROUP BY match_id, team_b_goals) s
+        GROUP BY match_id
+     ),
+     diff_dist AS (
+       SELECT match_id, json_object_agg(goal_difference::text, n) AS d
+         FROM (SELECT match_id, goal_difference, COUNT(*) AS n FROM lp GROUP BY match_id, goal_difference) s
+        GROUP BY match_id
+     ),
+     core AS (
+       SELECT
+         match_id,
+         COUNT(*) AS total_predictions,
+         COUNT(*) FILTER (WHERE prediction_result = 'home') AS home_votes,
+         COUNT(*) FILTER (WHERE prediction_result = 'draw') AS draw_votes,
+         COUNT(*) FILTER (WHERE prediction_result = 'away') AS away_votes,
+         COUNT(*) FILTER (WHERE first_scorer = 'home') AS fs_home,
+         COUNT(*) FILTER (WHERE first_scorer = 'away') AS fs_away,
+         COUNT(*) FILTER (WHERE first_scorer = 'none') AS fs_none
+       FROM lp
+       GROUP BY match_id
+     )
+     SELECT
+       m.id AS match_id, m.home_team, m.away_team, m.kickoff_time_utc,
+       m.status, m.home_score, m.away_score, m.first_scorer_team,
+       core.total_predictions, core.home_votes, core.draw_votes, core.away_votes,
+       core.fs_home, core.fs_away, core.fs_none,
+       home_dist.d AS home_goal_dist,
+       away_dist.d AS away_goal_dist,
+       diff_dist.d AS diff_dist
+       FROM core
+       JOIN matches m ON m.id = core.match_id
+       LEFT JOIN home_dist ON home_dist.match_id = core.match_id
+       LEFT JOIN away_dist ON away_dist.match_id = core.match_id
+       LEFT JOIN diff_dist ON diff_dist.match_id = core.match_id
      ORDER BY m.kickoff_time_utc DESC
-     LIMIT 20`,
+     LIMIT 30`,
     [leagueId]
   );
 
