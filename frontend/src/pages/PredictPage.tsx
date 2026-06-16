@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { format, subHours, isToday, isAfter, isBefore } from 'date-fns';
 import { Link } from 'react-router-dom';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, type CSSProperties } from 'react';
 import { matchesApi, predictionsApi } from '../api';
 import { Countdown } from '../components/Countdown';
 import { Match, MatchPrediction } from '../types';
@@ -109,15 +109,18 @@ function MatchCard({ match, pred }: { match: Match; pred?: MatchPrediction }) {
   );
 }
 
-type Filter = 'next' | 'today' | 'group' | 'ko' | 'past' | 'all';
+type Filter = 'next' | 'today' | 'past' | 'group' | 'ko' | 'all';
 
-const FILTERS: { key: Filter; label: string }[] = [
-  { key: 'next',  label: 'Upcoming' },
-  { key: 'today', label: 'Today' },
-  { key: 'group', label: 'Group' },
-  { key: 'ko',    label: 'Knockout' },
-  { key: 'past',  label: 'Past' },
-  { key: 'all',   label: 'All' },
+// Primary chips (the ones a player almost always wants) come first and are
+// styled to stand out. Secondary chips (Group/Knockout/All) follow, smaller
+// and dimmer so they don't compete for attention.
+const FILTERS: { key: Filter; label: string; primary: boolean }[] = [
+  { key: 'next',  label: 'Upcoming', primary: true },
+  { key: 'today', label: 'Today',    primary: true },
+  { key: 'past',  label: 'Past',     primary: true },
+  { key: 'group', label: 'Group',    primary: false },
+  { key: 'ko',    label: 'Knockout', primary: false },
+  { key: 'all',   label: 'All',      primary: false },
 ];
 
 function isKnockout(round: string) {
@@ -202,34 +205,48 @@ export function PredictPage() {
         )}
       </div>
 
-      {/* Filter chips */}
+      {/* Filter chips — primary (Upcoming/Today/Past) are larger and color-accented; secondary chips smaller and muted */}
       <div style={{
         display: 'flex',
-        gap: 6,
+        gap: 8,
         overflowX: 'auto',
         marginBottom: 14,
         paddingBottom: 4,
         WebkitOverflowScrolling: 'touch',
       }}>
-        {FILTERS.map(({ key, label }) => {
+        {FILTERS.map(({ key, label, primary }) => {
           const active = filter === key;
-          return (
-            <button
-              key={key}
-              onClick={() => setFilter(key)}
-              style={{
+          // Primary chips: amber/gold when inactive (so they're noticeable), bright white-on-primary when active.
+          // Secondary chips: faded white pill, only the active one fully opaque.
+          const styles: CSSProperties = primary
+            ? {
+                flex: '0 0 auto',
+                padding: '10px 18px',
+                borderRadius: 999,
+                border: active ? 'none' : '1.5px solid rgba(232,160,32,0.55)',
+                background: active ? 'var(--accent, #e8a020)' : 'rgba(232,160,32,0.18)',
+                color: active ? 'white' : '#f9ca24',
+                fontWeight: 800,
+                fontSize: 14,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                boxShadow: active ? '0 2px 10px rgba(232,160,32,0.45)' : 'none',
+                letterSpacing: '0.02em',
+              }
+            : {
                 flex: '0 0 auto',
                 padding: '6px 14px',
                 borderRadius: 999,
                 border: 'none',
                 background: active ? 'white' : 'rgba(255,255,255,0.15)',
-                color: active ? 'var(--primary)' : 'white',
-                fontWeight: 700,
+                color: active ? 'var(--primary)' : 'rgba(255,255,255,0.75)',
+                fontWeight: 600,
                 fontSize: 12,
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
-              }}
-            >
+              };
+          return (
+            <button key={key} onClick={() => setFilter(key)} style={styles}>
               {label}
             </button>
           );

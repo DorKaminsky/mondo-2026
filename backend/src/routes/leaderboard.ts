@@ -27,6 +27,65 @@ leaderboardRouter.get('/', authenticate, async (req: Request, res: Response) => 
   res.json({ leaderboard: rows, currentUserId: req.user!.id });
 });
 
+// Public-within-league player profile.
+// Privacy contract:
+//  - Pre-tournament picks: returned in full. Deadline (June 11) has long passed,
+//    nothing to leak — visible to every league member by design.
+//  - Per-match predictions: ONLY for finished matches. We do NOT leak picks for
+//    upcoming/live matches (would let players copy each other's bets).
+//  - Scoped to the requester's league: a player in league A cannot view a player
+//    in league B even by guessing user_id.
+leaderboardRouter.get('/player/:id', authenticate, async (req: Request, res: Response) => {
+  const targetId = parseInt(req.params.id, 10);
+  if (Number.isNaN(targetId)) { res.status(400).json({ error: 'Invalid user id' }); return; }
+
+  const leagueId = req.user!.league_id;
+  if (!leagueId) { res.status(403).json({ error: 'Not in a league' }); return; }
+
+  const { rows: userRows } = await query<{
+    id: number; name: string; role: string; league_id: number | null;
+  }>(
+    `SELECT id, name, role, league_id FROM users WHERE id = $1`,
+    [targetId]
+  );
+  if (userRows.length === 0 || userRows[0].league_id !== leagueId) {
+    res.status(404).json({ error: 'Player not found in your league' });
+    return;
+  }
+  const player = userRows[0];
+
+  const { rows: scoreRows } = await query(
+    `SELECT pre_tournament_points, group_stage_points, knockout_points,
+            total_points, perfect_matches_count
+       FROM scores WHERE user_id = $1`,
+    [targetId]
+  );
+
+  const { rows: preTournament } = await query(
+    `SELECT * FROM pre_tournament_predictions WHERE user_id = $1`,
+    [targetId]
+  );
+
+  const { rows: matchHistory } = await query(
+    `SELECT mp.id, mp.match_id, mp.prediction_result, mp.team_a_goals, mp.team_b_goals,
+            mp.first_scorer, mp.goal_difference, mp.is_default, mp.points_earned,
+            m.home_team, m.away_team, m.kickoff_time_utc, m.round, m.group_name,
+            m.home_score, m.away_score, m.status as match_status, m.first_scorer_team
+       FROM match_predictions mp
+       JOIN matches m ON mp.match_id = m.id
+      WHERE mp.user_id = $1 AND m.status = 'finished'
+      ORDER BY m.kickoff_time_utc DESC`,
+    [targetId]
+  );
+
+  res.json({
+    player: { id: player.id, name: player.name, role: player.role },
+    score: scoreRows[0] ?? null,
+    preTournament: preTournament[0] ?? null,
+    matchHistory,
+  });
+});
+
 leaderboardRouter.get('/me', authenticate, async (req: Request, res: Response) => {
   const userId = req.user!.id;
 

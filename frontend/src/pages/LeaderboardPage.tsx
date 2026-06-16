@@ -1,11 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { leaderboardApi } from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import { avatarColor, initials } from '../utils/flags';
 
 export function LeaderboardPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { data, isLoading } = useQuery({ queryKey: ['leaderboard'], queryFn: leaderboardApi.all });
+
+  const goToPlayer = (id: number) => navigate(`/player/${id}`);
 
   if (isLoading) return <div className="loading"><div className="spinner" /></div>;
 
@@ -52,11 +56,13 @@ export function LeaderboardPage() {
           {board.map((entry, i) => (
             <div
               key={entry.id}
+              onClick={() => goToPlayer(entry.id)}
               className={entry.id === user?.id ? 'rank-me' : ''}
               style={{
                 display: 'flex', alignItems: 'center', gap: 12,
                 padding: '12px 16px',
                 borderTop: i > 0 ? '1px solid var(--border)' : 'none',
+                cursor: 'pointer',
               }}
             >
               <span style={{ width: 24, fontWeight: 700, fontSize: 14, color: 'var(--text-muted)', textAlign: 'center' }}>
@@ -90,7 +96,10 @@ export function LeaderboardPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.1fr 1fr', gap: 8, alignItems: 'flex-end' }}>
             {/* 2nd place */}
             {top3[1] ? (
-              <div style={{ textAlign: 'center', opacity: top3[1].id === user?.id ? 1 : 0.92 }}>
+              <div
+                onClick={() => goToPlayer(top3[1].id)}
+                style={{ textAlign: 'center', opacity: top3[1].id === user?.id ? 1 : 0.92, cursor: 'pointer' }}
+              >
                 <div className="avatar" style={{ background: avatarColor(top3[1].name), margin: '0 auto 6px', width: 44, height: 44, fontSize: 16 }}>
                   {initials(top3[1].name)}
                 </div>
@@ -107,7 +116,10 @@ export function LeaderboardPage() {
 
             {/* 1st place */}
             {top3[0] && (
-              <div style={{ textAlign: 'center', opacity: top3[0].id === user?.id ? 1 : 0.95 }}>
+              <div
+                onClick={() => goToPlayer(top3[0].id)}
+                style={{ textAlign: 'center', opacity: top3[0].id === user?.id ? 1 : 0.95, cursor: 'pointer' }}
+              >
                 <div style={{ fontSize: 20, marginBottom: 4 }}>👑</div>
                 <div className="avatar" style={{ background: avatarColor(top3[0].name), margin: '0 auto 6px', width: 52, height: 52, fontSize: 18 }}>
                   {initials(top3[0].name)}
@@ -125,7 +137,10 @@ export function LeaderboardPage() {
 
             {/* 3rd place */}
             {top3[2] ? (
-              <div style={{ textAlign: 'center', opacity: top3[2].id === user?.id ? 1 : 0.88 }}>
+              <div
+                onClick={() => goToPlayer(top3[2].id)}
+                style={{ textAlign: 'center', opacity: top3[2].id === user?.id ? 1 : 0.88, cursor: 'pointer' }}
+              >
                 <div className="avatar" style={{ background: avatarColor(top3[2].name), margin: '0 auto 6px', width: 40, height: 40, fontSize: 15 }}>
                   {initials(top3[2].name)}
                 </div>
@@ -152,11 +167,13 @@ export function LeaderboardPage() {
             return (
               <div
                 key={entry.id}
+                onClick={() => goToPlayer(entry.id)}
                 className={isMe ? 'rank-me' : ''}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 12,
                   padding: '12px 16px',
                   borderTop: '1px solid var(--border)',
+                  cursor: 'pointer',
                 }}
               >
                 <span style={{ width: 28, fontWeight: 700, fontSize: 14, color: 'var(--text-muted)', textAlign: 'center' }}>

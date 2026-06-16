@@ -80,6 +80,13 @@ export const leaderboardApi = {
     api.get<{ score: Score | null; matchHistory: MatchPrediction[] }>('/leaderboard/me').then(r => r.data),
   stats: () =>
     api.get('/leaderboard/stats').then(r => r.data),
+  player: (id: number) =>
+    api.get<{
+      player: { id: number; name: string; role: string };
+      score: Score | null;
+      preTournament: PreTournamentPrediction | null;
+      matchHistory: MatchPrediction[];
+    }>(`/leaderboard/player/${id}`).then(r => r.data),
   summary: () =>
     api.get<{
       pointsSinceLastVisit: number;

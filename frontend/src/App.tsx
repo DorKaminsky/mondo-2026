@@ -9,6 +9,7 @@ import { PredictPage } from './pages/PredictPage';
 import { MatchPredictPage } from './pages/MatchPredictPage';
 import { PreTournamentPage } from './pages/PreTournamentPage';
 import { LeaderboardPage } from './pages/LeaderboardPage';
+import { PlayerProfilePage } from './pages/PlayerProfilePage';
 import { ProfilePage } from './pages/ProfilePage';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { AdminMatches } from './pages/admin/AdminMatches';
@@ -31,6 +32,7 @@ function AppRoutes() {
         <Route path="/predict/:matchId" element={<ProtectedRoute><MatchPredictPage /></ProtectedRoute>} />
         <Route path="/pre-tournament" element={<ProtectedRoute><PreTournamentPage /></ProtectedRoute>} />
         <Route path="/leaderboard" element={<ProtectedRoute><LeaderboardPage /></ProtectedRoute>} />
+        <Route path="/player/:id" element={<ProtectedRoute><PlayerProfilePage /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
         <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
         <Route path="/admin/matches" element={<AdminRoute><AdminMatches /></AdminRoute>} />
