@@ -144,6 +144,25 @@ export function MatchPredictPage() {
     },
   });
 
+  // Players sometimes set goal_difference inconsistently with the home/away
+  // counts they entered. The diff is intentionally a separate dimension (you
+  // can bet 2-1 result but diff=3, etc.), so we don't auto-correct — but we
+  // do warn so unintentional mismatches don't silently cost points.
+  function handleSubmitClick() {
+    const expectedDiff = Math.abs(homeGoals - awayGoals);
+    if (expectedDiff !== goalDiff) {
+      const ok = confirm(
+        `⚠️ Goal difference mismatch\n\n` +
+        `You entered ${homeGoals}–${awayGoals}, which has a difference of ${expectedDiff}.\n` +
+        `But you set Goal Difference to ${goalDiff}.\n\n` +
+        `OK = save anyway (you'll lose the goal-difference point if it's wrong)\n` +
+        `Cancel = go back and fix it`
+      );
+      if (!ok) return;
+    }
+    submit.mutate();
+  }
+
   if (matchLoading || !match) {
     return <div className="loading"><div className="spinner" /></div>;
   }
@@ -364,7 +383,7 @@ export function MatchPredictPage() {
 
           <button
             className={`btn ${saved ? 'btn-success' : 'btn-primary'}`}
-            onClick={() => submit.mutate()}
+            onClick={handleSubmitClick}
             disabled={submit.isPending || saved}
           >
             {submit.isPending ? 'Saving...' : saved ? '✓ Saved!' : existing ? 'Update Prediction' : 'Save Prediction'}

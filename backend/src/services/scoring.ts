@@ -7,6 +7,20 @@ const KNOCKOUT_POINTS_PER_CORRECT = 3;
 const DEFAULT_POINTS_PER_CORRECT = 1;
 const MAX_PREDICTIONS = 5;
 
+// Perfect-prediction bonus, introduced for round-2 of group stage (Czechia vs
+// South Africa, match_number 25). Applies to non-default predictions only.
+// Group +2, Knockout +3. Stacks with the existing ⭐ counter.
+// Earlier matches keep historical scoring even if re-scored.
+const PERFECT_BONUS_FROM_MATCH_NUMBER = 25;
+const PERFECT_BONUS_GROUP = 2;
+const PERFECT_BONUS_KNOCKOUT = 3;
+
+function perfectBonusFor(match: Match, isDefault: boolean): number {
+  if (isDefault) return 0;
+  if (match.match_number < PERFECT_BONUS_FROM_MATCH_NUMBER) return 0;
+  return isKnockout(match.round) ? PERFECT_BONUS_KNOCKOUT : PERFECT_BONUS_GROUP;
+}
+
 export function isKnockout(round: string): boolean {
   return ['r32', 'r16', 'qf', 'sf', 'final'].includes(round);
 }
@@ -52,13 +66,18 @@ export function scorePrediction(pred: MatchPrediction, match: Match): Prediction
 
   const points = correct * pointsPerCorrect;
   const maxPoints = MAX_PREDICTIONS * pointsPerCorrect;
+  const cappedPoints = Math.min(points, maxPoints);
 
   // Perfect match: all 5 correct AND not a 0-0 default
   const isPerfect =
     correct === MAX_PREDICTIONS &&
     !(pred.is_default && match.home_score === 0 && match.away_score === 0);
 
-  return { points: Math.min(points, maxPoints), isPerfect };
+  // Bonus only applies to *real* perfect predictions on matches at/after the
+  // round-2-of-group cutoff. Defaults never get it (perfectBonusFor enforces this).
+  const bonus = isPerfect ? perfectBonusFor(match, pred.is_default) : 0;
+
+  return { points: cappedPoints + bonus, isPerfect };
 }
 
 export async function calculateMatchScores(matchId: number): Promise<void> {
@@ -102,8 +121,19 @@ export async function calculateMatchScores(matchId: number): Promise<void> {
     );
     if (prior.length > 0) {
       const priorPointsColumn = isKnockout(match.round) ? 'knockout_points' : 'group_stage_points';
+      // To recognise a previously-stored perfect prediction we recompute what
+      // the engine *would have stored* for it. That number depends on:
+      //   - default vs real (defaults: 5 max, never bonus)
+      //   - group vs knockout
+      //   - whether the match qualifies for the perfect bonus (match_number >= 25)
+      // and matches the formula in scorePrediction.
+      const perfectStoredValue = (isDefault: boolean): number => {
+        if (isDefault) return 5; // 5 × 1pt, no bonus
+        const base = isKnockout(match.round) ? 15 : 10;
+        return base + perfectBonusFor(match, false);
+      };
       for (const p of prior) {
-        const wasPerfect = p.points_earned === (p.is_default ? 5 : (isKnockout(match.round) ? 15 : 10))
+        const wasPerfect = p.points_earned === perfectStoredValue(p.is_default)
                           && !(p.is_default && match.home_score === 0 && match.away_score === 0);
         await client.query(
           `UPDATE scores SET

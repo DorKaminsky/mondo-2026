@@ -247,6 +247,52 @@ describe('scorePrediction — individual match scoring', () => {
   });
 });
 
+describe('perfect-prediction bonus (Czechia vs South Africa onward, match_number >= 25)', () => {
+  // Pre-cutoff: same as before
+  test('perfect group prediction on match_number 24 is 10 pts (no bonus)', () => {
+    const match = makeMatch({ match_number: 24, round: 'group', home_score: 2, away_score: 1, first_scorer_team: 'home' });
+    const pred = makePred({ prediction_result: 'home', team_a_goals: 2, team_b_goals: 1, goal_difference: 1, first_scorer: 'home' });
+    const { points, isPerfect } = scorePrediction(pred, match);
+    expect(isPerfect).toBe(true);
+    expect(points).toBe(10);
+  });
+
+  // Cutoff inclusive
+  test('perfect group prediction on match_number 25 (Czechia vs South Africa) is 12 pts', () => {
+    const match = makeMatch({ match_number: 25, round: 'group', home_score: 2, away_score: 1, first_scorer_team: 'home' });
+    const pred = makePred({ prediction_result: 'home', team_a_goals: 2, team_b_goals: 1, goal_difference: 1, first_scorer: 'home' });
+    const { points, isPerfect } = scorePrediction(pred, match);
+    expect(isPerfect).toBe(true);
+    expect(points).toBe(12); // 10 base + 2 bonus
+  });
+
+  test('perfect knockout prediction post-cutoff is 18 pts', () => {
+    const match = makeMatch({ match_number: 60, round: 'qf', home_score: 2, away_score: 1, first_scorer_team: 'home' });
+    const pred = makePred({ prediction_result: 'home', team_a_goals: 2, team_b_goals: 1, goal_difference: 1, first_scorer: 'home' });
+    const { points, isPerfect } = scorePrediction(pred, match);
+    expect(isPerfect).toBe(true);
+    expect(points).toBe(18); // 15 base + 3 bonus
+  });
+
+  test('partial post-cutoff prediction does NOT get the bonus', () => {
+    const match = makeMatch({ match_number: 25, round: 'group', home_score: 2, away_score: 1, first_scorer_team: 'home' });
+    const pred = makePred({ prediction_result: 'home', team_a_goals: 1, team_b_goals: 0, goal_difference: 1, first_scorer: 'home' }); // result+diff+scorer ok, goals off
+    const { points, isPerfect } = scorePrediction(pred, match);
+    expect(isPerfect).toBe(false);
+    expect(points).toBe(6); // 3 correct × 2, no bonus
+  });
+
+  test('default predictions never get the bonus, even if all 5 happen to match', () => {
+    // Engineered: default 0-0 'draw' 'none' on a real 1-0 home win — 0 correct
+    const match = makeMatch({ match_number: 30, round: 'group', home_score: 0, away_score: 0, first_scorer_team: 'none' });
+    const pred = makePred({ prediction_result: 'draw', team_a_goals: 0, team_b_goals: 0, goal_difference: 0, first_scorer: 'none', is_default: true });
+    const { points, isPerfect } = scorePrediction(pred, match);
+    // 0-0 default rule: not perfect, scores at 1pt × 5 correct = 5
+    expect(isPerfect).toBe(false);
+    expect(points).toBe(5); // no bonus regardless of match_number
+  });
+});
+
 describe('scorePrediction — 5 users across 10 matches', () => {
   test('Alice scores 100 points (10 perfect matches)', () => {
     expect(totalPoints(alicePreds)).toBe(100);

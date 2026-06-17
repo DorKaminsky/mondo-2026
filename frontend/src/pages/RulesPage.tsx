@@ -37,16 +37,23 @@ const ENGLISH = [
             <tr style={{ borderBottom: '1px solid var(--border)' }}>
               <td style={{ padding: '6px 4px' }}>Group stage</td>
               <td style={{ textAlign: 'right', padding: '6px 4px' }}><b>2 pts</b></td>
-              <td style={{ textAlign: 'right', padding: '6px 4px' }}>10 (perfect ⭐)</td>
+              <td style={{ textAlign: 'right', padding: '6px 4px' }}>10 / <b>12</b> ⭐</td>
             </tr>
             <tr>
               <td style={{ padding: '6px 4px' }}>Knockout (R32 → Final)</td>
               <td style={{ textAlign: 'right', padding: '6px 4px' }}><b>3 pts</b></td>
-              <td style={{ textAlign: 'right', padding: '6px 4px' }}>15 (perfect ⭐)</td>
+              <td style={{ textAlign: 'right', padding: '6px 4px' }}>15 / <b>18</b> ⭐</td>
             </tr>
           </tbody>
         </table>
-        <p style={{ marginTop: 12, fontSize: 13 }}><b>Perfect match</b> = all 5 bets correct. A ⭐ shows next to your name on the leaderboard.</p>
+        <p style={{ marginTop: 12, fontSize: 13 }}>
+          <b>Perfect match</b> = all 5 bets correct. Earns a ⭐ next to your name on the leaderboard.
+        </p>
+        <p style={{ marginTop: 6, fontSize: 13, padding: 8, background: 'rgba(232,160,32,0.15)', borderRadius: 6, border: '1px solid rgba(232,160,32,0.4)' }}>
+          🎁 <b>Perfect bonus</b> (from round 2 of group stage onward, Czechia vs South Africa onward):
+          a perfect group match is now worth <b>12 pts</b> (10 + 2 bonus), and a perfect knockout match
+          is worth <b>18 pts</b> (15 + 3 bonus). Defaults don't qualify.
+        </p>
       </>
     ),
   },
@@ -129,16 +136,23 @@ const HEBREW = [
             <tr style={{ borderBottom: '1px solid var(--border)' }}>
               <td style={{ padding: '6px 4px', textAlign: 'right' }}>שלב הבתים</td>
               <td style={{ textAlign: 'left', padding: '6px 4px' }}><b>2 נק'</b></td>
-              <td style={{ textAlign: 'left', padding: '6px 4px' }}>10 (מושלם ⭐)</td>
+              <td style={{ textAlign: 'left', padding: '6px 4px' }}>10 / <b>12</b> ⭐</td>
             </tr>
             <tr>
               <td style={{ padding: '6px 4px', textAlign: 'right' }}>נוקאאוט (R32 → גמר)</td>
               <td style={{ textAlign: 'left', padding: '6px 4px' }}><b>3 נק'</b></td>
-              <td style={{ textAlign: 'left', padding: '6px 4px' }}>15 (מושלם ⭐)</td>
+              <td style={{ textAlign: 'left', padding: '6px 4px' }}>15 / <b>18</b> ⭐</td>
             </tr>
           </tbody>
         </table>
-        <p style={{ marginTop: 12, fontSize: 13 }}><b>משחק מושלם</b> = כל 5 הניחושים נכונים. ⭐ מופיע ליד השם שלך בטבלה.</p>
+        <p style={{ marginTop: 12, fontSize: 13 }}>
+          <b>משחק מושלם</b> = כל 5 הניחושים נכונים. מקבל ⭐ ליד השם שלך בטבלה.
+        </p>
+        <p style={{ marginTop: 6, fontSize: 13, padding: 8, background: 'rgba(232,160,32,0.15)', borderRadius: 6, border: '1px solid rgba(232,160,32,0.4)' }}>
+          🎁 <b>בונוס מושלם</b> (החל מסיבוב 2 של הבתים, צ'כיה נגד דרום אפריקה והלאה):
+          משחק מושלם בשלב הבתים שווה כעת <b>12 נק'</b> (10 + 2 בונוס), ובשלב הנוקאאוט שווה <b>18 נק'</b>
+          (15 + 3 בונוס). חיזויי ברירת מחדל לא זכאים.
+        </p>
       </>
     ),
   },
