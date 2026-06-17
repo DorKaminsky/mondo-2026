@@ -87,6 +87,9 @@ export function MatchPredictPage() {
   const [firstScorer, setFirstScorer] = useState<FirstScorer>('none');
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+  // Diff-mismatch confirmation modal: stores the expectedDiff for the message,
+  // null = modal hidden.
+  const [diffWarning, setDiffWarning] = useState<{ expected: number } | null>(null);
   // Snapshot of the next match's id, used by the post-save redirect.
   // Updated on every render once we've computed nextMatch below.
   const nextMatchAtSubmit = useRef<number | null>(null);
@@ -151,14 +154,8 @@ export function MatchPredictPage() {
   function handleSubmitClick() {
     const expectedDiff = Math.abs(homeGoals - awayGoals);
     if (expectedDiff !== goalDiff) {
-      const ok = confirm(
-        `⚠️ Goal difference mismatch\n\n` +
-        `You entered ${homeGoals}–${awayGoals}, which has a difference of ${expectedDiff}.\n` +
-        `But you set Goal Difference to ${goalDiff}.\n\n` +
-        `OK = save anyway (you'll lose the goal-difference point if it's wrong)\n` +
-        `Cancel = go back and fix it`
-      );
-      if (!ok) return;
+      setDiffWarning({ expected: expectedDiff });
+      return;
     }
     submit.mutate();
   }
@@ -511,6 +508,86 @@ export function MatchPredictPage() {
           <p className="text-muted text-xs" style={{ textAlign: 'center', marginTop: 8 }}>
             Predictions become visible once the deadline passes. Auto-default = player didn't predict in time.
           </p>
+        </div>
+      )}
+
+      {/* Goal-diff mismatch confirmation modal — replaces the browser's confirm()
+          so the dialog matches the app's look (no "vercel.app says" header). */}
+      {diffWarning && (
+        <div
+          onClick={() => setDiffWarning(null)}
+          style={{
+            position: 'fixed', inset: 0,
+            background: 'rgba(0,0,0,0.6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 20, zIndex: 1000,
+            backdropFilter: 'blur(2px)',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'white',
+              borderRadius: 16,
+              maxWidth: 360, width: '100%',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.4)',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Amber header bar */}
+            <div style={{
+              background: 'linear-gradient(135deg, #f9ca24 0%, #e8a020 100%)',
+              padding: '18px 20px',
+              display: 'flex', alignItems: 'center', gap: 10,
+            }}>
+              <span style={{ fontSize: 28 }}>⚠️</span>
+              <div style={{ fontWeight: 800, fontSize: 17, color: 'white' }}>
+                Goal difference mismatch
+              </div>
+            </div>
+
+            <div style={{ padding: 20 }}>
+              <p style={{ fontSize: 14, lineHeight: 1.5, marginBottom: 14, color: 'var(--text)' }}>
+                You entered <b>{homeGoals}–{awayGoals}</b>, a difference of{' '}
+                <b style={{ color: 'var(--primary)' }}>{diffWarning.expected}</b>.
+                <br />
+                But Goal Difference is set to <b style={{ color: '#e8a020' }}>{goalDiff}</b>.
+              </p>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 18, lineHeight: 1.4 }}>
+                If you save anyway, you'll lose the goal-difference point if your guess is wrong.
+                The diff is a separate prediction — saving on purpose is fine.
+              </p>
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  onClick={() => setDiffWarning(null)}
+                  style={{
+                    flex: 1, padding: '12px', borderRadius: 10,
+                    border: '2px solid var(--border)',
+                    background: 'white',
+                    color: 'var(--text)',
+                    fontWeight: 700, fontSize: 14,
+                    cursor: 'pointer',
+                  }}
+                >
+                  ← Fix it
+                </button>
+                <button
+                  onClick={() => { setDiffWarning(null); submit.mutate(); }}
+                  style={{
+                    flex: 1, padding: '12px', borderRadius: 10,
+                    border: 'none',
+                    background: '#e8a020',
+                    color: 'white',
+                    fontWeight: 700, fontSize: 14,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Save anyway
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
