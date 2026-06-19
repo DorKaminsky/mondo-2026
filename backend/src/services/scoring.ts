@@ -235,12 +235,15 @@ export async function calculatePreTournamentScores(
 }
 
 export async function applyDefaultPredictions(): Promise<void> {
-  // Find matches whose deadline just passed (within last 5 minutes) and users with no prediction
+  // Find matches whose deadline passed within the last 15 minutes and have
+  // users without a prediction. Window must match the cron interval (15min)
+  // — see backend/src/jobs/index.ts. Plus a small idempotency margin: ON
+  // CONFLICT DO NOTHING below means re-processing is safe.
   const { rows: matches } = await query<Match>(
     `SELECT * FROM matches
      WHERE status = 'scheduled'
        AND kickoff_time_utc - INTERVAL '1 hour' <= NOW()
-       AND kickoff_time_utc - INTERVAL '65 minutes' >= NOW()`
+       AND kickoff_time_utc - INTERVAL '75 minutes' >= NOW()`
   );
 
   for (const match of matches) {
