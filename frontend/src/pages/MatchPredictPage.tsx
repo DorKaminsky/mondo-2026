@@ -7,7 +7,7 @@ import { localTimezoneLabel } from '../utils/flags';
 import { CalendarReminder } from '../components/CalendarReminder';
 import { Countdown } from '../components/Countdown';
 import { PredictionResult, FirstScorer } from '../types';
-import { flag, teamColor, avatarColor, initials } from '../utils/flags';
+import { flag, teamColor, teamShort, avatarColor, initials } from '../utils/flags';
 
 function GoalStepper({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
@@ -426,90 +426,145 @@ export function MatchPredictPage() {
       )}
 
       {/* ── Everyone's predictions (only visible after deadline) ─────────── */}
-      {allPredictions?.deadlinePassed && allPredictions.predictions.length > 0 && (
+      {allPredictions?.deadlinePassed && allPredictions.predictions.length > 0 && (() => {
+        // Group players by exact scoreline (e.g. "2-1"). Order: most popular
+        // group first; but once the match has finished, the group matching the
+        // actual final score sticks to the top with a 🎯 highlight.
+        const groups = new Map<string, typeof allPredictions.predictions>();
+        for (const p of allPredictions.predictions) {
+          const key = `${p.team_a_goals}-${p.team_b_goals}`;
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key)!.push(p);
+        }
+        const finished = match.status === 'finished';
+        const actualKey = finished && match.home_score != null && match.away_score != null
+          ? `${match.home_score}-${match.away_score}`
+          : null;
+
+        const ordered = [...groups.entries()].sort((a, b) => {
+          if (actualKey) {
+            if (a[0] === actualKey) return -1;
+            if (b[0] === actualKey) return 1;
+          }
+          // Larger group first; ties broken numerically (lower scoreline first)
+          if (b[1].length !== a[1].length) return b[1].length - a[1].length;
+          return a[0].localeCompare(b[0], undefined, { numeric: true });
+        });
+
+        return (
         <div style={{ marginTop: 24 }}>
           <p className="section-header" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>🔓</span>
             <span>Everyone's Predictions ({allPredictions.predictions.length})</span>
           </p>
-          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-            {allPredictions.predictions.map((p, i) => {
-              const finished = match.status === 'finished';
-              const resultLabel = p.prediction_result === 'home'
-                ? 'Home'
-                : p.prediction_result === 'away'
-                  ? 'Away'
-                  : 'Draw';
-              const firstScorerLabel = p.first_scorer === 'home'
-                ? 'Home'
-                : p.first_scorer === 'away'
-                  ? 'Away'
-                  : 'None';
-              const firstScorerFlag = p.first_scorer === 'home'
-                ? flag(match.home_team)
-                : p.first_scorer === 'away'
-                  ? flag(match.away_team)
-                  : '🚫';
-
-              return (
-                <div
-                  key={p.id}
-                  style={{
-                    padding: '14px',
-                    borderTop: i > 0 ? '1px solid var(--border)' : 'none',
-                    background: p.is_default ? 'rgba(232,160,32,0.08)' : 'white',
-                  }}
-                >
-                  {/* Player row */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                    <div className="avatar" style={{ background: avatarColor(p.name), width: 32, height: 32, fontSize: 12 }}>
-                      {initials(p.name)}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {p.name}
-                      </div>
-                      {p.is_default && (
-                        <div style={{ fontSize: 10, color: 'var(--accent-dark)', fontWeight: 600 }}>
-                          ⚠️ Auto-default (didn't predict)
-                        </div>
-                      )}
-                    </div>
-                    {finished && p.points_earned != null && (
-                      <div style={{
-                        fontWeight: 800,
-                        fontSize: 15,
-                        color: p.points_earned > 0 ? 'var(--primary)' : 'var(--text-muted)',
-                        background: p.points_earned > 0 ? 'rgba(31,106,58,0.12)' : 'transparent',
-                        padding: '4px 10px',
-                        borderRadius: 999,
-                      }}>
-                        +{p.points_earned} pts
-                      </div>
-                    )}
-                  </div>
-
-                  {/* All 5 prediction fields, each labeled */}
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(5, 1fr)',
-                    gap: 4,
-                  }}>
-                    <Field label="Result" value={resultLabel} />
-                    <Field label="Home" value={String(p.team_a_goals)} flag={flag(match.home_team)} />
-                    <Field label="Away" value={String(p.team_b_goals)} flag={flag(match.away_team)} />
-                    <Field label="Diff" value={String(p.goal_difference)} />
-                    <Field label="1st" value={firstScorerLabel} flag={firstScorerFlag} />
-                  </div>
+          {ordered.map(([scoreKey, members]) => {
+            const isWinningGroup = scoreKey === actualKey;
+            return (
+              <div
+                key={scoreKey}
+                className="card"
+                style={{
+                  padding: 0,
+                  overflow: 'hidden',
+                  marginBottom: 12,
+                  border: isWinningGroup ? '2px solid var(--primary)' : undefined,
+                  boxShadow: isWinningGroup ? '0 4px 14px rgba(31,106,58,0.25)' : undefined,
+                }}
+              >
+                {/* Group header */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '10px 14px',
+                  background: isWinningGroup
+                    ? 'linear-gradient(90deg, rgba(31,106,58,0.18), rgba(31,106,58,0.05))'
+                    : 'var(--green-light, rgba(31,106,58,0.06))',
+                  borderBottom: '1px solid var(--border)',
+                }}>
+                  {isWinningGroup && <span style={{ fontSize: 16 }}>🎯</span>}
+                  <span style={{ fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span>{flag(match.home_team)}</span>
+                    <b style={{ color: 'var(--primary)', fontSize: 16 }}>{scoreKey.replace('-', '–')}</b>
+                    <span>{flag(match.away_team)}</span>
+                  </span>
+                  <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>
+                    {members.length} {members.length === 1 ? 'pick' : 'picks'}
+                    {isWinningGroup && <span style={{ color: 'var(--primary)', marginLeft: 6 }}>· FINAL</span>}
+                  </span>
                 </div>
-              );
-            })}
-          </div>
+
+                {/* Members */}
+                {members.map((p, i) => {
+                  const resultLabel = p.prediction_result === 'home'
+                    ? teamShort(match.home_team)
+                    : p.prediction_result === 'away'
+                      ? teamShort(match.away_team)
+                      : 'Draw';
+                  const firstScorerLabel = p.first_scorer === 'home'
+                    ? teamShort(match.home_team)
+                    : p.first_scorer === 'away'
+                      ? teamShort(match.away_team)
+                      : 'None';
+                  const firstScorerFlag = p.first_scorer === 'home'
+                    ? flag(match.home_team)
+                    : p.first_scorer === 'away'
+                      ? flag(match.away_team)
+                      : '🚫';
+
+                  return (
+                    <div
+                      key={p.id}
+                      style={{
+                        padding: '12px 14px',
+                        borderTop: i > 0 ? '1px solid var(--border)' : 'none',
+                        background: p.is_default ? 'rgba(232,160,32,0.08)' : 'white',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                        <div className="avatar" style={{ background: avatarColor(p.name), width: 30, height: 30, fontSize: 11 }}>
+                          {initials(p.name)}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {p.name}
+                          </div>
+                          {p.is_default && (
+                            <div style={{ fontSize: 10, color: 'var(--accent-dark)', fontWeight: 600 }}>
+                              ⚠️ Auto-default
+                            </div>
+                          )}
+                        </div>
+                        {finished && p.points_earned != null && (
+                          <div style={{
+                            fontWeight: 800,
+                            fontSize: 14,
+                            color: p.points_earned > 0 ? 'var(--primary)' : 'var(--text-muted)',
+                            background: p.points_earned > 0 ? 'rgba(31,106,58,0.12)' : 'transparent',
+                            padding: '3px 9px',
+                            borderRadius: 999,
+                          }}>
+                            +{p.points_earned} pts
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Result + diff + first-scorer (home/away goals are now in the group header, no need to repeat) */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
+                        <Field label="Result" value={resultLabel} />
+                        <Field label="Diff" value={String(p.goal_difference)} />
+                        <Field label="1st" value={firstScorerLabel} flag={firstScorerFlag} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
           <p className="text-muted text-xs" style={{ textAlign: 'center', marginTop: 8 }}>
-            Predictions become visible once the deadline passes. Auto-default = player didn't predict in time.
+            Grouped by exact scoreline. Largest group first; the actual result (when known) pins to the top.
           </p>
         </div>
-      )}
+        );
+      })()}
 
       {/* Goal-diff mismatch confirmation modal — replaces the browser's confirm()
           so the dialog matches the app's look (no "vercel.app says" header). */}

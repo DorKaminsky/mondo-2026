@@ -96,6 +96,76 @@ export function flag(team: string): string {
   return TEAM_FLAGS[t] ?? '🏳️';
 }
 
+// FIFA 3-letter codes for tight cells (e.g. "Bosnia and Herzegovina" → "BIH").
+// Add countries here as they enter the tournament.
+const TEAM_SHORT: Record<string, string> = {
+  'Algeria': 'ALG',
+  'Argentina': 'ARG',
+  'Australia': 'AUS',
+  'Austria': 'AUT',
+  'Belgium': 'BEL',
+  'Bosnia and Herzegovina': 'BIH',
+  'Brazil': 'BRA',
+  'Cabo Verde': 'CPV',
+  'Cameroon': 'CMR',
+  'Canada': 'CAN',
+  'Chile': 'CHI',
+  'China': 'CHN',
+  'Colombia': 'COL',
+  'Congo DR': 'COD',
+  'Costa Rica': 'CRC',
+  'Croatia': 'CRO',
+  'Cuba': 'CUB',
+  'Curaçao': 'CUW',
+  'Czechia': 'CZE',
+  "Côte d'Ivoire": 'CIV',
+  'Denmark': 'DEN',
+  'Ecuador': 'ECU',
+  'Egypt': 'EGY',
+  'England': 'ENG',
+  'France': 'FRA',
+  'Germany': 'GER',
+  'Ghana': 'GHA',
+  'Haiti': 'HAI',
+  'Honduras': 'HON',
+  'IR Iran': 'IRN',
+  'Iraq': 'IRQ',
+  'Italy': 'ITA',
+  'Japan': 'JPN',
+  'Jordan': 'JOR',
+  'Korea Republic': 'KOR',
+  'Mexico': 'MEX',
+  'Morocco': 'MAR',
+  'Netherlands': 'NED',
+  'New Zealand': 'NZL',
+  'Nigeria': 'NGA',
+  'Norway': 'NOR',
+  'Panama': 'PAN',
+  'Paraguay': 'PAR',
+  'Poland': 'POL',
+  'Portugal': 'POR',
+  'Qatar': 'QAT',
+  'Saudi Arabia': 'KSA',
+  'Scotland': 'SCO',
+  'Senegal': 'SEN',
+  'Serbia': 'SRB',
+  'South Africa': 'RSA',
+  'Spain': 'ESP',
+  'Sweden': 'SWE',
+  'Switzerland': 'SUI',
+  'Tunisia': 'TUN',
+  'Türkiye': 'TUR',
+  'Uruguay': 'URU',
+  'USA': 'USA',
+  'Uzbekistan': 'UZB',
+  'Venezuela': 'VEN',
+};
+
+export function teamShort(team: string): string {
+  const t = canonicalize(team);
+  return TEAM_SHORT[t] ?? team.slice(0, 3).toUpperCase();
+}
+
 /** Dominant color per nation for the color bar under the flag */
 export const TEAM_COLORS: Record<string, string> = {
   'Argentina': '#74acdf',
