@@ -114,6 +114,11 @@ export const leaderboardApi = {
         correct_goal_diffs: number;
       }>;
     }>('/leaderboard/player-stats').then(r => r.data),
+  rankHistory: () =>
+    api.get<{
+      matches: { id: number; label: string }[];
+      players: { id: number; name: string; ranks: number[] }[];
+    }>('/leaderboard/rank-history').then(r => r.data),
 };
 
 // Admin

@@ -304,6 +304,70 @@ leaderboardRouter.get('/player-stats', authenticate, async (req: Request, res: R
   res.json({ stats: rows });
 });
 
+leaderboardRouter.get('/rank-history', authenticate, async (req: Request, res: Response) => {
+  const leagueId = req.user!.league_id;
+  if (!leagueId) { res.json({ matches: [], players: [] }); return; }
+
+  const { rows } = await query<{
+    user_id: number; name: string;
+    match_id: number; kickoff_time_utc: string;
+    home_team: string; away_team: string;
+    cum_points: number;
+  }>(
+    `WITH mp AS (
+       SELECT mp.user_id, m.id AS match_id, m.kickoff_time_utc,
+              m.home_team, m.away_team,
+              COALESCE(mp.points_earned, 0) AS pts
+         FROM match_predictions mp
+         JOIN matches m ON m.id = mp.match_id
+         JOIN users u ON u.id = mp.user_id
+        WHERE u.league_id = $1 AND u.role != 'admin'
+          AND m.status = 'finished' AND mp.points_earned IS NOT NULL
+     ),
+     cum AS (
+       SELECT user_id, match_id, kickoff_time_utc, home_team, away_team,
+              SUM(pts) OVER (PARTITION BY user_id ORDER BY kickoff_time_utc, match_id) AS cum_points
+         FROM mp
+     )
+     SELECT cum.user_id, u.name, cum.match_id, cum.kickoff_time_utc,
+            cum.home_team, cum.away_team, cum.cum_points
+       FROM cum JOIN users u ON u.id = cum.user_id
+      ORDER BY cum.kickoff_time_utc, cum.match_id, cum.user_id`,
+    [leagueId]
+  );
+
+  if (rows.length === 0) { res.json({ matches: [], players: [] }); return; }
+
+  const matchMap = new Map<number, { id: number; label: string }>();
+  for (const row of rows) {
+    if (!matchMap.has(row.match_id)) {
+      const h = row.home_team.substring(0, 3).toUpperCase();
+      const a = row.away_team.substring(0, 3).toUpperCase();
+      matchMap.set(row.match_id, { id: row.match_id, label: `${h}-${a}` });
+    }
+  }
+  const matches = [...matchMap.values()];
+
+  const playerNames = new Map<number, string>();
+  const cumMap = new Map<string, number>();
+  for (const row of rows) {
+    playerNames.set(row.user_id, row.name);
+    cumMap.set(`${row.match_id}:${row.user_id}`, Number(row.cum_points));
+  }
+
+  const playerIds = [...playerNames.keys()];
+  const players = playerIds.map(uid => ({
+    id: uid,
+    name: playerNames.get(uid)!,
+    ranks: matches.map(m => {
+      const pts = cumMap.get(`${m.id}:${uid}`) ?? 0;
+      return playerIds.filter(oid => (cumMap.get(`${m.id}:${oid}`) ?? 0) > pts).length + 1;
+    }),
+  }));
+
+  res.json({ matches, players });
+});
+
 leaderboardRouter.get('/stats', authenticate, async (req: Request, res: Response) => {
   const leagueId = req.user!.league_id;
   if (!leagueId) {
