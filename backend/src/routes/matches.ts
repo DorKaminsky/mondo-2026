@@ -18,7 +18,7 @@ matchesRouter.get('/upcoming', authenticate, async (_req: Request, res: Response
   // bounded to a sensible near-horizon. For full schedule, use GET /matches.
   const { rows } = await query<Match>(
     `SELECT * FROM matches
-     WHERE status != 'finished'
+     WHERE status = 'scheduled'
      ORDER BY kickoff_time_utc ASC
      LIMIT 10`
   );

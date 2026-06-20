@@ -57,13 +57,41 @@ export async function syncLiveScores(): Promise<void> {
       firstScorerTeam = firstGoal.team?.id === homeComp.team?.id ? 'home' : 'away';
     }
 
-    const { rows } = await query<{
+    let { rows } = await query<{
       id: number; status: string; home_score: number | null;
       away_score: number | null; first_scorer_team: string | null;
     }>(
       'SELECT id, status, home_score, away_score, first_scorer_team FROM matches WHERE api_match_id = $1',
       [espnId]
     );
+
+    // Fallback: match by team name + kickoff date when api_match_id isn't seeded yet.
+    // Self-heals by writing the ESPN ID so future syncs skip this path.
+    if (rows.length === 0) {
+      const homeName: string = homeComp.team?.displayName ?? '';
+      const awayName: string = awayComp.team?.displayName ?? '';
+      const eventDate: string = (event.date ?? '').slice(0, 10); // YYYY-MM-DD
+      if (homeName && awayName && eventDate) {
+        const fallback = await query<{
+          id: number; status: string; home_score: number | null;
+          away_score: number | null; first_scorer_team: string | null;
+        }>(
+          `SELECT id, status, home_score, away_score, first_scorer_team
+           FROM matches
+           WHERE api_match_id IS NULL
+             AND home_team ILIKE $1 AND away_team ILIKE $2
+             AND DATE(kickoff_time_utc) BETWEEN ($3::date - interval '1 day') AND ($3::date + interval '1 day')
+           LIMIT 1`,
+          [homeName, awayName, eventDate]
+        );
+        if (fallback.rows.length > 0) {
+          await query('UPDATE matches SET api_match_id = $1 WHERE id = $2', [espnId, fallback.rows[0].id]);
+          rows = fallback.rows;
+          logger.info(`Live sync: mapped ESPN ${espnId} (${homeName} vs ${awayName}) → match ${fallback.rows[0].id} by name`);
+        }
+      }
+    }
+
     if (rows.length === 0) continue;
     const match = rows[0];
 

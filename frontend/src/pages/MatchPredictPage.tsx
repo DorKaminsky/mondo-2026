@@ -447,6 +447,7 @@ export function MatchPredictPage() {
           groups.get(key)!.push(p);
         }
         const finished = match.status === 'finished';
+        const isLive = allPredictions.isLive;
         const actualKey = finished && match.home_score != null && match.away_score != null
           ? `${match.home_score}-${match.away_score}`
           : null;
@@ -455,6 +456,12 @@ export function MatchPredictPage() {
           if (actualKey) {
             if (a[0] === actualKey) return -1;
             if (b[0] === actualKey) return 1;
+          }
+          // During live: sort groups by highest provisional points any member has
+          if (isLive) {
+            const maxA = Math.max(0, ...a[1].map(p => p.provisional_points ?? 0));
+            const maxB = Math.max(0, ...b[1].map(p => p.provisional_points ?? 0));
+            if (maxB !== maxA) return maxB - maxA;
           }
           // Larger group first; ties broken numerically (lower scoreline first)
           if (b[1].length !== a[1].length) return b[1].length - a[1].length;
@@ -474,7 +481,6 @@ export function MatchPredictPage() {
           )}
           {ordered.map(([scoreKey, members]) => {
             const isWinningGroup = scoreKey === actualKey;
-            const isLive = allPredictions.isLive;
             return (
               <div
                 key={scoreKey}
