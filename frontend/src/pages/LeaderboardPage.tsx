@@ -7,13 +7,18 @@ import { avatarColor, initials } from '../utils/flags';
 export function LeaderboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { data, isLoading } = useQuery({ queryKey: ['leaderboard'], queryFn: leaderboardApi.all });
+  const { data, isLoading } = useQuery({
+    queryKey: ['leaderboard'],
+    queryFn: leaderboardApi.all,
+    refetchInterval: 30_000,
+  });
 
   const goToPlayer = (id: number) => navigate(`/player/${id}`);
 
   if (isLoading) return <div className="loading"><div className="spinner" /></div>;
 
   const board = data?.leaderboard ?? [];
+  const isLive = data?.isLive ?? false;
   const top3 = board.slice(0, 3);
   const rest = board.slice(3);
 
@@ -89,9 +94,22 @@ export function LeaderboardPage() {
     <div className="page">
       {/* Hero podium */}
       <div className="hero" style={{ padding: '20px 20px 28px' }}>
-        <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 16 }}>
-          Standings
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            Standings
+          </span>
+          {isLive && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(232,160,32,0.25)', borderRadius: 999, padding: '2px 8px' }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#e8a020', display: 'inline-block', animation: 'pulse 1.5s infinite' }} />
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#e8a020', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Live</span>
+            </span>
+          )}
         </div>
+        {isLive && (
+          <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginBottom: 12, marginTop: -8 }}>
+            Provisional — based on current scores, updates every 30 s
+          </p>
+        )}
         {top3.length > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.1fr 1fr', gap: 8, alignItems: 'flex-end' }}>
             {/* 2nd place */}
@@ -108,7 +126,9 @@ export function LeaderboardPage() {
                 </div>
                 <div style={{ background: 'rgba(255,255,255,0.2)', borderRadius: '8px 8px 0 0', padding: '10px 4px' }}>
                   <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--silver)' }}>🥈</div>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: 'white' }}>{top3[1].total_points}</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: isLive ? '#e8a020' : 'white' }}>
+                    {isLive ? '~' : ''}{isLive ? (top3[1].provisional_total ?? top3[1].total_points) : top3[1].total_points}
+                  </div>
                   <div style={{ fontSize: 10, opacity: 0.7, color: 'white' }}>pts</div>
                 </div>
               </div>
@@ -129,7 +149,9 @@ export function LeaderboardPage() {
                 </div>
                 <div style={{ background: 'rgba(255,255,255,0.25)', borderRadius: '8px 8px 0 0', padding: '12px 4px' }}>
                   <div style={{ fontSize: 24, fontWeight: 900, color: 'var(--gold)' }}>🥇</div>
-                  <div style={{ fontSize: 18, fontWeight: 900, color: 'white' }}>{top3[0].total_points}</div>
+                  <div style={{ fontSize: 18, fontWeight: 900, color: isLive ? '#e8a020' : 'white' }}>
+                    {isLive ? '~' : ''}{isLive ? (top3[0].provisional_total ?? top3[0].total_points) : top3[0].total_points}
+                  </div>
                   <div style={{ fontSize: 10, opacity: 0.7, color: 'white' }}>pts</div>
                 </div>
               </div>
@@ -149,7 +171,9 @@ export function LeaderboardPage() {
                 </div>
                 <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: '8px 8px 0 0', padding: '8px 4px' }}>
                   <div style={{ fontSize: 20, fontWeight: 900, color: '#cd7f32' }}>🥉</div>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: 'white' }}>{top3[2].total_points}</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: isLive ? '#e8a020' : 'white' }}>
+                    {isLive ? '~' : ''}{isLive ? (top3[2].provisional_total ?? top3[2].total_points) : top3[2].total_points}
+                  </div>
                   <div style={{ fontSize: 10, opacity: 0.7, color: 'white' }}>pts</div>
                 </div>
               </div>
@@ -188,7 +212,14 @@ export function LeaderboardPage() {
                   </div>
                   <div className="text-xs text-muted">{entry.perfect_matches_count} perfect ⭐</div>
                 </div>
-                <div style={{ fontWeight: 800, fontSize: 17, color: 'var(--primary)' }}>{entry.total_points}</div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontWeight: 800, fontSize: 17, color: isLive ? '#c07a00' : 'var(--primary)' }}>
+                    {isLive ? '~' : ''}{isLive ? (entry.provisional_total ?? entry.total_points) : entry.total_points}
+                  </div>
+                  {isLive && (entry.provisional_delta ?? 0) > 0 && (
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#c07a00' }}>+{entry.provisional_delta} live</div>
+                  )}
+                </div>
               </div>
             );
           })}

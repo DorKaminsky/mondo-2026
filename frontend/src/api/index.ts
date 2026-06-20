@@ -77,7 +77,7 @@ export const preTournamentApi = {
 // Leaderboard
 export const leaderboardApi = {
   all: () =>
-    api.get<{ leaderboard: LeaderboardEntry[]; currentUserId: number }>('/leaderboard').then(r => r.data),
+    api.get<{ leaderboard: LeaderboardEntry[]; currentUserId: number; isLive: boolean }>('/leaderboard').then(r => r.data),
   me: () =>
     api.get<{ score: Score | null; matchHistory: MatchPrediction[] }>('/leaderboard/me').then(r => r.data),
   stats: () =>

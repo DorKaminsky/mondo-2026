@@ -102,4 +102,6 @@ export interface LeaderboardEntry {
   knockout_points: number;
   perfect_matches_count: number;
   rank: number;
+  provisional_total?: number;
+  provisional_delta?: number;
 }

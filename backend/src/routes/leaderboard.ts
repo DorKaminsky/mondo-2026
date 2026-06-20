@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { query } from '../db/pool';
 import { authenticate } from '../middleware/auth';
+import { scorePrediction } from '../services/scoring';
+import { Match, MatchPrediction } from '../types';
 
 export const leaderboardRouter = Router();
 
@@ -12,7 +14,11 @@ leaderboardRouter.get('/', authenticate, async (req: Request, res: Response) => 
   }
   // Anyone in the league competes (players AND super_admins who set league_id),
   // except admins (league moderators) — they oversee but don't compete.
-  const { rows } = await query(
+  interface BoardRow {
+    id: number; name: string; total_points: number; pre_tournament_points: number;
+    group_stage_points: number; knockout_points: number; perfect_matches_count: number; rank: number;
+  }
+  const { rows } = await query<BoardRow>(
     `SELECT
        u.id, u.name,
        s.total_points, s.pre_tournament_points, s.group_stage_points,
@@ -24,7 +30,49 @@ leaderboardRouter.get('/', authenticate, async (req: Request, res: Response) => 
      ORDER BY s.total_points DESC, s.perfect_matches_count DESC`,
     [leagueId]
   );
-  res.json({ leaderboard: rows, currentUserId: req.user!.id });
+
+  // Check for live matches and layer provisional points on top of the base standings
+  const { rows: liveMatches } = await query<Match>(
+    `SELECT * FROM matches WHERE status = 'live' AND home_score IS NOT NULL`
+  );
+
+  if (liveMatches.length === 0) {
+    res.json({ leaderboard: rows, currentUserId: req.user!.id, isLive: false });
+    return;
+  }
+
+  const liveMatchIds = liveMatches.map((m: Match) => m.id);
+  const { rows: livePredictions } = await query<MatchPrediction>(
+    `SELECT mp.*
+     FROM match_predictions mp
+     JOIN users u ON u.id = mp.user_id
+     WHERE u.league_id = $1 AND mp.match_id = ANY($2::int[])`,
+    [leagueId, liveMatchIds]
+  );
+
+  // Compute provisional delta (what each player would earn if the match ended now)
+  const provisionalDelta = new Map<number, number>();
+  for (const pred of livePredictions) {
+    const liveMatch = liveMatches.find((m: Match) => m.id === pred.match_id);
+    if (!liveMatch) continue;
+    const { points } = scorePrediction(pred, liveMatch);
+    provisionalDelta.set(pred.user_id, (provisionalDelta.get(pred.user_id) ?? 0) + points);
+  }
+
+  // Re-rank by provisional total
+  const leaderboard = rows
+    .map(entry => ({
+      ...entry,
+      provisional_total: Number(entry.total_points) + (provisionalDelta.get(entry.id) ?? 0),
+      provisional_delta: provisionalDelta.get(entry.id) ?? 0,
+    }))
+    .sort((a, b) =>
+      b.provisional_total - a.provisional_total ||
+      b.perfect_matches_count - a.perfect_matches_count
+    )
+    .map((entry, i) => ({ ...entry, rank: i + 1 }));
+
+  res.json({ leaderboard, currentUserId: req.user!.id, isLive: true });
 });
 
 // Public-within-league player profile.
