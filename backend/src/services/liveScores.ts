@@ -33,6 +33,9 @@ export async function syncLiveScores(): Promise<void> {
     }
   }
 
+  const liveOrFinished = allEvents.filter(e => mapEspnStatus(e.status?.type?.name ?? '') !== 'scheduled');
+  logger.info(`Live sync: ESPN returned ${allEvents.length} events, ${liveOrFinished.length} live/finished`);
+
   for (const event of allEvents) {
     const espnId = String(event.id);
     const statusName: string = event.status?.type?.name ?? 'STATUS_SCHEDULED';
@@ -92,7 +95,10 @@ export async function syncLiveScores(): Promise<void> {
       }
     }
 
-    if (rows.length === 0) continue;
+    if (rows.length === 0) {
+      logger.warn(`Live sync: no DB match for ESPN ${espnId} (${newStatus}) after id + name lookup`);
+      continue;
+    }
     const match = rows[0];
 
     // Don't overwrite admin-entered final results — but if ESPN still says

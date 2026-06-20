@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { query } from '../db/pool';
 import { authenticate } from '../middleware/auth';
+import { syncLiveScores } from '../services/liveScores';
+import { logger } from '../utils/logger';
 import { Match } from '../types';
 
 export const matchesRouter = Router();
@@ -30,6 +32,10 @@ matchesRouter.get('/live', authenticate, async (_req: Request, res: Response) =>
     `SELECT * FROM matches WHERE status = 'live' ORDER BY kickoff_time_utc ASC`
   );
   res.json({ matches: rows });
+  // Fire-and-forget sync whenever someone polls the live endpoint
+  if (rows.length > 0) {
+    syncLiveScores().catch(err => logger.error('On-demand live sync failed', { err }));
+  }
 });
 
 matchesRouter.get('/:id', authenticate, async (req: Request, res: Response) => {
