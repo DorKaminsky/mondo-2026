@@ -103,10 +103,6 @@ export async function syncLiveScores(): Promise<void> {
     }
     const match = rows[0];
 
-    // Don't overwrite admin-entered final results — but if ESPN still says
-    // the match is live, the admin marked it finished too early, so keep syncing.
-    if (match.status === 'finished' && newStatus === 'finished') continue;
-
     const unchanged =
       match.status === newStatus &&
       match.home_score === homeScore &&
