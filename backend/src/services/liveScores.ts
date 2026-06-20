@@ -6,12 +6,14 @@ import { logger } from '../utils/logger';
 const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard';
 
 function mapEspnStatus(name: string): 'scheduled' | 'live' | 'finished' {
-  if (name === 'STATUS_FINAL' || name === 'STATUS_FULL_TIME') return 'finished';
-  if (
-    name === 'STATUS_IN_PROGRESS' ||
-    name === 'STATUS_HALFTIME' ||
-    name === 'STATUS_END_PERIOD'
-  ) return 'live';
+  if ([
+    'STATUS_FINAL', 'STATUS_FULL_TIME', 'STATUS_FINAL_AET', 'STATUS_FINAL_PEN',
+  ].includes(name)) return 'finished';
+  if ([
+    'STATUS_IN_PROGRESS', 'STATUS_HALFTIME', 'STATUS_END_PERIOD',
+    'STATUS_FIRST_HALF', 'STATUS_SECOND_HALF', 'STATUS_EXTRA_TIME',
+    'STATUS_OVERTIME', 'STATUS_PENALTY',
+  ].includes(name)) return 'live';
   return 'scheduled';
 }
 
