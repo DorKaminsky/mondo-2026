@@ -177,77 +177,138 @@ function PerfectsChart({ stats }: { stats: EnrichedStat[] }) {
   );
 }
 
-const CHART_COLORS = ['#e53e3e', '#3182ce', '#38a169', '#d69e2e', '#805ad5', '#dd6b20', '#319795', '#e91e63'];
+const CHART_COLORS = ['#e53e3e', '#3182ce', '#38a169', '#d69e2e', '#805ad5', '#dd6b20', '#319795', '#e91e63',
+  '#f06292', '#26c6da', '#ff7043', '#66bb6a', '#ab47bc', '#42a5f5', '#ffa726', '#78909c'];
 
-function RankChart({ data }: { data: { matches: { id: number; label: string }[]; players: { id: number; name: string; ranks: number[] }[] } }) {
+function RankChart({ data }: { data: { matches: { id: number; label: string; kickoff: string }[]; players: { id: number; name: string; ranks: number[] }[] } }) {
   const { matches, players } = data;
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set(players.map(p => p.id)));
+
   if (matches.length < 2 || players.length < 2) return null;
 
+  const toggle = (id: number) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) { next.delete(id); } else { next.add(id); }
+    return next;
+  });
+  const allOn = selectedIds.size === players.length;
+
   const N = players.length;
-  const MT = 12, MB = 38, ML = 22, MR = 12;
-  const H = 180;
+  const MT = 12, MB = 36, ML = 22, MR = 12;
+  const H = 190;
   const PLOT_H = H - MT - MB;
-  const MIN_W = Math.max(matches.length * 38, 280);
+
+  // Time-based X: proportional to real kickoff time
+  const kickoffs = matches.map(m => new Date(m.kickoff).getTime());
+  const minT = Math.min(...kickoffs);
+  const maxT = Math.max(...kickoffs);
+  const timeSpanDays = (maxT - minT) / (1000 * 60 * 60 * 24);
+  const MIN_W = Math.max(timeSpanDays * 18 + ML + MR, 320);
   const PLOT_W = MIN_W - ML - MR;
-  const xOf = (i: number) => ML + (i / (matches.length - 1)) * PLOT_W;
+  const xOf = (idx: number) => {
+    if (maxT === minT) return ML + PLOT_W / 2;
+    return ML + ((kickoffs[idx] - minT) / (maxT - minT)) * PLOT_W;
+  };
   const yOf = (rank: number) => MT + ((rank - 1) / Math.max(N - 1, 1)) * PLOT_H;
+
+  // Date labels: show one per unique date, positioned at first match of that day
+  const dateLabelPositions: { x: number; label: string }[] = [];
+  const seenDates = new Set<string>();
+  matches.forEach((m, idx) => {
+    const d = new Date(m.kickoff);
+    const key = `${d.getUTCMonth()}-${d.getUTCDate()}`;
+    if (!seenDates.has(key)) {
+      seenDates.add(key);
+      dateLabelPositions.push({
+        x: xOf(idx),
+        label: d.toLocaleDateString('en', { month: 'short', day: 'numeric', timeZone: 'UTC' }),
+      });
+    }
+  });
 
   return (
     <div className="card" style={{ marginBottom: 24, padding: 0, overflow: 'hidden' }}>
-      <div style={{ padding: '12px 14px 4px', fontWeight: 800, fontSize: 14 }}>📈 Rank Over Time</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px 4px' }}>
+        <div style={{ fontWeight: 800, fontSize: 14 }}>📈 Rank Over Time</div>
+        <button
+          onClick={() => setSelectedIds(allOn ? new Set() : new Set(players.map(p => p.id)))}
+          style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, border: 'none', cursor: 'pointer', background: 'rgba(0,0,0,0.07)', color: 'var(--text-muted)' }}
+        >
+          {allOn ? 'Clear all' : 'Show all'}
+        </button>
+      </div>
       <div style={{ padding: '0 14px 6px' }}>
-        <p className="text-xs text-muted">Position after each match — 1st is best</p>
+        <p className="text-xs text-muted">Position after each match — tap names to filter</p>
       </div>
-      <div style={{ overflowX: 'auto' }}>
-        <svg width={MIN_W} height={H} viewBox={`0 0 ${MIN_W} ${H}`} style={{ display: 'block' }}>
-          {/* Grid lines */}
-          {Array.from({ length: N }, (_, i) => {
-            const y = yOf(i + 1);
-            return (
-              <g key={i}>
-                <line x1={ML} y1={y} x2={MIN_W - MR} y2={y} stroke="rgba(0,0,0,0.06)" strokeWidth={1} />
-                <text x={ML - 4} y={y + 4} textAnchor="end" fontSize={9} fontWeight={700} fill="#999">{i + 1}</text>
-              </g>
-            );
-          })}
 
-          {/* X-axis labels — show every Nth to avoid crowding */}
-          {matches.map((m, idx) => {
-            const step = Math.ceil(matches.length / 8);
-            if (idx % step !== 0 && idx !== matches.length - 1) return null;
-            const x = xOf(idx);
-            return (
-              <text key={m.id} x={x} y={H - MB + 10} textAnchor="end" fontSize={8} fill="#999"
-                transform={`rotate(-40 ${x} ${H - MB + 10})`}>
-                {m.label}
-              </text>
-            );
-          })}
+      {/* Clickable player legend */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '4px 14px 10px' }}>
+        {players.map((player, pi) => {
+          const color = CHART_COLORS[pi % CHART_COLORS.length];
+          const on = selectedIds.has(player.id);
+          return (
+            <button
+              key={player.id}
+              onClick={() => toggle(player.id)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '4px 10px', borderRadius: 999, border: `2px solid ${on ? color : 'transparent'}`,
+                background: on ? `${color}18` : 'rgba(0,0,0,0.05)',
+                cursor: 'pointer', opacity: on ? 1 : 0.4, transition: 'all 0.15s',
+              }}
+            >
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+              <span style={{ fontSize: 11, fontWeight: 700, color: on ? color : 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                {player.name.split(' ')[0]}
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
-          {/* Player lines + dots */}
-          {players.map((player, pi) => {
-            const color = CHART_COLORS[pi % CHART_COLORS.length];
-            const pts = player.ranks.map((rank, idx) => `${xOf(idx)},${yOf(rank)}`).join(' ');
-            return (
-              <g key={player.id}>
-                <polyline points={pts} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
-                {player.ranks.map((rank, idx) => (
-                  <circle key={idx} cx={xOf(idx)} cy={yOf(rank)} r={3.5} fill={color} stroke="white" strokeWidth={1.5} />
-                ))}
+      {selectedIds.size === 0 ? (
+        <div style={{ textAlign: 'center', padding: '20px 14px 24px', color: 'var(--text-muted)', fontSize: 13 }}>
+          Tap names above to show their rank trend
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <svg width={MIN_W} height={H} viewBox={`0 0 ${MIN_W} ${H}`} style={{ display: 'block' }}>
+            {/* Grid lines + rank labels */}
+            {Array.from({ length: N }, (_, i) => {
+              const y = yOf(i + 1);
+              return (
+                <g key={i}>
+                  <line x1={ML} y1={y} x2={MIN_W - MR} y2={y} stroke="rgba(0,0,0,0.06)" strokeWidth={1} />
+                  <text x={ML - 4} y={y + 4} textAnchor="end" fontSize={9} fontWeight={700} fill="#aaa">{i + 1}</text>
+                </g>
+              );
+            })}
+
+            {/* Date labels on X axis */}
+            {dateLabelPositions.map(({ x, label }) => (
+              <g key={label}>
+                <line x1={x} y1={MT} x2={x} y2={H - MB} stroke="rgba(0,0,0,0.06)" strokeWidth={1} strokeDasharray="3,3" />
+                <text x={x} y={H - MB + 14} textAnchor="middle" fontSize={9} fill="#aaa">{label}</text>
               </g>
-            );
-          })}
-        </svg>
-      </div>
-      {/* Legend */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, padding: '8px 14px 14px' }}>
-        {players.map((player, pi) => (
-          <div key={player.id} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: CHART_COLORS[pi % CHART_COLORS.length], flexShrink: 0 }} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{player.name.split(' ')[0]}</span>
-          </div>
-        ))}
-      </div>
+            ))}
+
+            {/* Player lines + dots (only selected) */}
+            {players.map((player, pi) => {
+              if (!selectedIds.has(player.id)) return null;
+              const color = CHART_COLORS[pi % CHART_COLORS.length];
+              const pts = player.ranks.map((rank, idx) => `${xOf(idx)},${yOf(rank)}`).join(' ');
+              return (
+                <g key={player.id}>
+                  <polyline points={pts} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+                  {player.ranks.map((rank, idx) => (
+                    <circle key={idx} cx={xOf(idx)} cy={yOf(rank)} r={3.5} fill={color} stroke="white" strokeWidth={1.5} />
+                  ))}
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+      )}
     </div>
   );
 }

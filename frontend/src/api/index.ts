@@ -116,7 +116,7 @@ export const leaderboardApi = {
     }>('/leaderboard/player-stats').then(r => r.data),
   rankHistory: () =>
     api.get<{
-      matches: { id: number; label: string }[];
+      matches: { id: number; label: string; kickoff: string }[];
       players: { id: number; name: string; ranks: number[] }[];
     }>('/leaderboard/rank-history').then(r => r.data),
 };

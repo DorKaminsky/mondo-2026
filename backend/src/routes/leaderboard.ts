@@ -338,12 +338,12 @@ leaderboardRouter.get('/rank-history', authenticate, async (req: Request, res: R
 
   if (rows.length === 0) { res.json({ matches: [], players: [] }); return; }
 
-  const matchMap = new Map<number, { id: number; label: string }>();
+  const matchMap = new Map<number, { id: number; label: string; kickoff: string }>();
   for (const row of rows) {
     if (!matchMap.has(row.match_id)) {
       const h = row.home_team.substring(0, 3).toUpperCase();
       const a = row.away_team.substring(0, 3).toUpperCase();
-      matchMap.set(row.match_id, { id: row.match_id, label: `${h}-${a}` });
+      matchMap.set(row.match_id, { id: row.match_id, label: `${h}-${a}`, kickoff: row.kickoff_time_utc });
     }
   }
   const matches = [...matchMap.values()];
