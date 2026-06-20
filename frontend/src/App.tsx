@@ -18,6 +18,7 @@ import { AdminSettings } from './pages/admin/AdminSettings';
 import { AdminLeagues } from './pages/admin/AdminLeagues';
 import { AdminPreTournament } from './pages/admin/AdminPreTournament';
 import { RulesPage } from './pages/RulesPage';
+import { StatsPage } from './pages/StatsPage';
 
 function AppRoutes() {
   const { user } = useAuth();
@@ -32,6 +33,7 @@ function AppRoutes() {
         <Route path="/predict/:matchId" element={<ProtectedRoute><MatchPredictPage /></ProtectedRoute>} />
         <Route path="/pre-tournament" element={<ProtectedRoute><PreTournamentPage /></ProtectedRoute>} />
         <Route path="/leaderboard" element={<ProtectedRoute><LeaderboardPage /></ProtectedRoute>} />
+        <Route path="/stats" element={<ProtectedRoute><StatsPage /></ProtectedRoute>} />
         <Route path="/player/:id" element={<ProtectedRoute><PlayerProfilePage /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
         <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />

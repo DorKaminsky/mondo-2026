@@ -23,6 +23,10 @@ function ResultForm({ match, onSave }: { match: Match; onSave: () => void }) {
       qc.invalidateQueries({ queryKey: ['matches'] });
       onSave();
     },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? String(err);
+      alert(`Save failed: ${msg}`);
+    },
   });
 
   const wasFinished = match.status === 'finished';
@@ -63,6 +67,7 @@ function ResultForm({ match, onSave }: { match: Match; onSave: () => void }) {
       <div className="form-group">
         <label>Status</label>
         <select value={status} onChange={e => setStatus(e.target.value as Match['status'])}>
+          <option value="scheduled">Scheduled (reset)</option>
           <option value="live">Live (no scoring yet)</option>
           <option value="finished">Finished (calculate scores)</option>
         </select>

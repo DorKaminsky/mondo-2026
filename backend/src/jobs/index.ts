@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { applyDefaultPredictions } from '../services/scoring';
+import { syncLiveScores } from '../services/liveScores';
 import { logger } from '../utils/logger';
 
 export function startJobs() {
@@ -17,6 +18,17 @@ export function startJobs() {
       await applyDefaultPredictions();
     } catch (err) {
       logger.error('Default predictions job failed', { err });
+    }
+  });
+
+  // Sync live scores every 5 minutes — separate from defaults job so ESPN
+  // fetches are more frequent (live score freshness) without waking the DB
+  // as often as applyDefaultPredictions does.
+  cron.schedule('*/5 * * * *', async () => {
+    try {
+      await syncLiveScores();
+    } catch (err) {
+      logger.error('Live score sync job failed', { err });
     }
   });
 

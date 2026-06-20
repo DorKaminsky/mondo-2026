@@ -33,6 +33,14 @@ const UserIcon = () => (
   </svg>
 );
 
+const StatsIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="20" x2="18" y2="10"/>
+    <line x1="12" y1="20" x2="12" y2="4"/>
+    <line x1="6" y1="20" x2="6" y2="14"/>
+  </svg>
+);
+
 const SettingsIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="3"/>
@@ -52,6 +60,7 @@ export function BottomNav() {
     { path: '/', label: 'Home', Icon: HomeIcon },
     { path: '/predict', label: 'Predict', Icon: BallIcon },
     { path: '/leaderboard', label: 'Standings', Icon: TrophyIcon },
+    { path: '/stats', label: 'Stats', Icon: StatsIcon },
     { path: '/profile', label: 'Profile', Icon: UserIcon },
     ...(user?.role === 'admin' || user?.role === 'super_admin' ? [{ path: '/admin', label: 'Admin', Icon: SettingsIcon }] : []),
   ];

@@ -224,9 +224,17 @@ export function MatchPredictPage() {
               <div style={{ fontWeight: 800, fontSize: 15, marginTop: 6, lineHeight: 1.2 }}>{match.home_team}</div>
             </div>
             <div style={{ textAlign: 'center', padding: '0 8px' }}>
-              {match.status === 'finished' ? (
-                <div style={{ fontWeight: 900, fontSize: 24, color: 'var(--primary)' }}>
-                  {match.home_score}–{match.away_score}
+              {(match.status === 'finished' || match.status === 'live') && match.home_score !== null ? (
+                <div>
+                  <div style={{ fontWeight: 900, fontSize: 24, color: match.status === 'live' ? '#e8a020' : 'var(--primary)' }}>
+                    {match.home_score}–{match.away_score}
+                  </div>
+                  {match.status === 'live' && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 3 }}>
+                      <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#e53e3e', animation: 'pulse 1.5s infinite' }} />
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#e53e3e', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Live</span>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div style={{ color: 'var(--text-muted)', fontWeight: 700 }}>vs</div>
@@ -253,10 +261,12 @@ export function MatchPredictPage() {
       </div>
 
       {isPast && (
-        <div className="alert alert-warning" style={{ marginTop: 0 }}>
+        <div className="alert alert-warning" style={{ marginTop: 0, background: match.status === 'live' ? 'rgba(232,160,32,0.15)' : undefined }}>
           {match.status === 'finished'
             ? `Final score: ${match.home_score} – ${match.away_score}`
-            : '⚠️ Prediction deadline has passed'}
+            : match.status === 'live'
+              ? '🔴 Match in progress — predictions are locked'
+              : '⚠️ Prediction deadline has passed'}
         </div>
       )}
 
@@ -457,8 +467,14 @@ export function MatchPredictPage() {
             <span>🔓</span>
             <span>Everyone's Predictions ({allPredictions.predictions.length})</span>
           </p>
+          {allPredictions.isLive && (
+            <p className="text-muted text-xs" style={{ textAlign: 'center', marginBottom: 8 }}>
+              Provisional points based on current score — updates every 30 s
+            </p>
+          )}
           {ordered.map(([scoreKey, members]) => {
             const isWinningGroup = scoreKey === actualKey;
+            const isLive = allPredictions.isLive;
             return (
               <div
                 key={scoreKey}
@@ -481,9 +497,10 @@ export function MatchPredictPage() {
                   borderBottom: '1px solid var(--border)',
                 }}>
                   {isWinningGroup && <span style={{ fontSize: 16 }}>🎯</span>}
+                  {isLive && <span style={{ fontSize: 14 }}>🔴</span>}
                   <span style={{ fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span>{flag(match.home_team)}</span>
-                    <b style={{ color: 'var(--primary)', fontSize: 16 }}>{scoreKey.replace('-', '–')}</b>
+                    <b style={{ color: isLive ? '#c07a00' : 'var(--primary)', fontSize: 16 }}>{scoreKey.replace('-', '–')}</b>
                     <span>{flag(match.away_team)}</span>
                   </span>
                   <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>
@@ -533,18 +550,22 @@ export function MatchPredictPage() {
                             </div>
                           )}
                         </div>
-                        {finished && p.points_earned != null && (
-                          <div style={{
-                            fontWeight: 800,
-                            fontSize: 14,
-                            color: p.points_earned > 0 ? 'var(--primary)' : 'var(--text-muted)',
-                            background: p.points_earned > 0 ? 'rgba(31,106,58,0.12)' : 'transparent',
-                            padding: '3px 9px',
-                            borderRadius: 999,
-                          }}>
-                            +{p.points_earned} pts
-                          </div>
-                        )}
+                        {(() => {
+                          const pts = finished ? p.points_earned : isLive ? (p.provisional_points ?? null) : null;
+                          if (pts === null || pts === undefined) return null;
+                          return (
+                            <div style={{
+                              fontWeight: 800,
+                              fontSize: 14,
+                              color: pts > 0 ? (finished ? 'var(--primary)' : '#c07a00') : 'var(--text-muted)',
+                              background: pts > 0 ? (finished ? 'rgba(31,106,58,0.12)' : 'rgba(232,160,32,0.15)') : 'transparent',
+                              padding: '3px 9px',
+                              borderRadius: 999,
+                            }}>
+                              {isLive ? '~' : '+'}{pts} pts
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* Result + diff + first-scorer (home/away goals are now in the group header, no need to repeat) */}

@@ -3,6 +3,7 @@ import Joi from 'joi';
 import { query } from '../db/pool';
 import { authenticate } from '../middleware/auth';
 import { MatchPrediction, Match } from '../types';
+import { scorePrediction } from '../services/scoring';
 
 export const predictionsRouter = Router();
 
@@ -90,14 +91,16 @@ predictionsRouter.get('/match/:matchId/all', authenticate, async (req: Request, 
   const leagueId = req.user!.league_id;
   if (!leagueId) { res.json({ predictions: [], deadlinePassed: false }); return; }
 
-  const { rows: matchRows } = await query<{ kickoff_time_utc: Date }>(
-    'SELECT kickoff_time_utc FROM matches WHERE id = $1', [matchId]
+  const { rows: matchRows } = await query<Match>(
+    'SELECT * FROM matches WHERE id = $1', [matchId]
   );
   if (matchRows.length === 0) { res.status(404).json({ error: 'Match not found' }); return; }
 
-  const kickoff = new Date(matchRows[0].kickoff_time_utc);
+  const match = matchRows[0];
+  const kickoff = new Date(match.kickoff_time_utc);
   const deadline = new Date(kickoff.getTime() - 60 * 60 * 1000);
-  const deadlinePassed = new Date() > deadline;
+  const matchStarted = match.status === 'live' || match.status === 'finished';
+  const deadlinePassed = matchStarted || new Date() > deadline;
   if (!deadlinePassed) { res.json({ predictions: [], deadlinePassed: false }); return; }
 
   const { rows } = await query(
@@ -112,5 +115,21 @@ predictionsRouter.get('/match/:matchId/all', authenticate, async (req: Request, 
     [matchId, leagueId]
   );
 
-  res.json({ predictions: rows, deadlinePassed: true });
+  const isLive = match.status === 'live' && match.home_score !== null && match.away_score !== null;
+
+  let resultRows: any[] = rows;
+  if (isLive) {
+    resultRows = rows.map(p => {
+      const { points } = scorePrediction(p as unknown as MatchPrediction, match);
+      return { ...p, provisional_points: points };
+    });
+    resultRows.sort((a, b) => {
+      const diff = (b.provisional_points ?? 0) - (a.provisional_points ?? 0);
+      if (diff !== 0) return diff;
+      if (a.is_default !== b.is_default) return a.is_default ? 1 : -1;
+      return String(a.name).localeCompare(String(b.name));
+    });
+  }
+
+  res.json({ predictions: resultRows, deadlinePassed: true, isLive });
 });

@@ -212,6 +212,50 @@ leaderboardRouter.get('/summary', authenticate, async (req: Request, res: Respon
   });
 });
 
+leaderboardRouter.get('/player-stats', authenticate, async (req: Request, res: Response) => {
+  const leagueId = req.user!.league_id;
+  if (!leagueId) {
+    res.json({ stats: [] });
+    return;
+  }
+  const { rows } = await query(
+    `SELECT
+       u.id,
+       u.name,
+       COALESCE(s.total_points, 0)          AS total_points,
+       COALESCE(s.perfect_matches_count, 0) AS perfect_matches_count,
+       COALESCE(s.group_stage_points, 0)    AS group_stage_points,
+       COALESCE(s.knockout_points, 0)       AS knockout_points,
+       COUNT(mp.id) FILTER (WHERE m.status = 'finished')                                     AS total_finished,
+       COUNT(mp.id) FILTER (WHERE m.status = 'finished' AND mp.is_default = false)           AS real_predictions,
+       COUNT(mp.id) FILTER (WHERE m.status = 'finished' AND mp.is_default = true)            AS defaults_count,
+       COUNT(mp.id) FILTER (WHERE m.status = 'finished' AND
+         mp.prediction_result = CASE
+           WHEN m.home_score > m.away_score THEN 'home'
+           WHEN m.home_score < m.away_score THEN 'away'
+           ELSE 'draw' END)                                                                   AS correct_results,
+       COUNT(mp.id) FILTER (WHERE m.status = 'finished' AND
+         mp.team_a_goals = m.home_score AND mp.team_b_goals = m.away_score)                  AS exact_scores,
+       COUNT(mp.id) FILTER (WHERE m.status = 'finished' AND
+         m.first_scorer_team IS NOT NULL AND
+         mp.first_scorer = m.first_scorer_team)                                               AS correct_first_scorers,
+       COUNT(mp.id) FILTER (WHERE m.status = 'finished' AND
+         m.first_scorer_team IS NOT NULL)                                                     AS total_with_first_scorer,
+       COUNT(mp.id) FILTER (WHERE m.status = 'finished' AND
+         mp.goal_difference = ABS(m.home_score - m.away_score))                              AS correct_goal_diffs
+     FROM users u
+     LEFT JOIN scores s ON s.user_id = u.id
+     LEFT JOIN match_predictions mp ON mp.user_id = u.id
+     LEFT JOIN matches m ON m.id = mp.match_id
+     WHERE u.league_id = $1 AND u.role != 'admin'
+     GROUP BY u.id, u.name, s.total_points, s.perfect_matches_count,
+              s.group_stage_points, s.knockout_points
+     ORDER BY s.total_points DESC NULLS LAST`,
+    [leagueId]
+  );
+  res.json({ stats: rows });
+});
+
 leaderboardRouter.get('/stats', authenticate, async (req: Request, res: Response) => {
   const leagueId = req.user!.league_id;
   if (!leagueId) {

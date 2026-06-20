@@ -13,7 +13,7 @@ const resultSchema = Joi.object({
   home_score: Joi.number().integer().min(0).required(),
   away_score: Joi.number().integer().min(0).required(),
   first_scorer_team: Joi.string().valid('home', 'away', 'none').required(),
-  status: Joi.string().valid('live', 'finished').default('finished'),
+  status: Joi.string().valid('scheduled', 'live', 'finished').default('finished'),
 });
 
 adminRouter.put('/matches/:id/result', async (req: Request, res: Response) => {

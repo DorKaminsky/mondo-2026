@@ -59,8 +59,10 @@ export const predictionsApi = {
         team_a_goals: number; team_b_goals: number;
         first_scorer: FirstScorer; goal_difference: number;
         is_default: boolean; points_earned: number | null;
+        provisional_points?: number;
       }>;
       deadlinePassed: boolean;
+      isLive?: boolean;
     }>(`/predictions/match/${matchId}/all`).then(r => r.data),
 };
 
@@ -100,6 +102,18 @@ export const leaderboardApi = {
         below: { name: string; points: number; delta: number } | null;
       };
     }>('/leaderboard/summary').then(r => r.data),
+  playerStats: () =>
+    api.get<{
+      stats: Array<{
+        id: number; name: string;
+        total_points: number; perfect_matches_count: number;
+        group_stage_points: number; knockout_points: number;
+        total_finished: number; real_predictions: number; defaults_count: number;
+        correct_results: number; exact_scores: number;
+        correct_first_scorers: number; total_with_first_scorer: number;
+        correct_goal_diffs: number;
+      }>;
+    }>('/leaderboard/player-stats').then(r => r.data),
 };
 
 // Admin
