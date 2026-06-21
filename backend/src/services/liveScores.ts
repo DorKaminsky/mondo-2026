@@ -21,6 +21,23 @@ function yyyymmdd(d: Date): string {
   return d.toISOString().slice(0, 10).replace(/-/g, '');
 }
 
+// Normalize team names to handle ESPN/FIFA aliases
+const TEAM_ALIASES: Record<string, string> = {
+  'united states': 'usa',
+  'ivory coast': "côte d'ivoire",
+  'south korea': 'korea republic',
+  'republic of korea': 'korea republic',
+  'iran': 'ir iran',
+  'czech republic': 'czechia',
+  'cape verde': 'cabo verde',
+  'democratic republic of the congo': 'congo dr',
+  'dr congo': 'congo dr',
+};
+function normTeam(name: string): string {
+  const lower = name.toLowerCase().trim();
+  return TEAM_ALIASES[lower] ?? lower;
+}
+
 export async function syncLiveScores(): Promise<void> {
   const today = new Date();
   const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
@@ -70,35 +87,42 @@ export async function syncLiveScores(): Promise<void> {
       [espnId]
     );
 
-    // Fallback: match by team name + kickoff date when api_match_id isn't seeded yet.
-    // Self-heals by writing the ESPN ID so future syncs skip this path.
+    // Fallback: match by team name + kickoff date.
+    // The DB was seeded with FIFA API IDs (400021xxx) but ESPN uses different IDs (760xxx),
+    // so the primary lookup always misses. We fetch all matches for the date and do
+    // name normalization in JS to handle aliases ("United States"→"USA", etc.).
+    // Self-heals by overwriting the old FIFA ID with the correct ESPN ID.
     if (rows.length === 0) {
       const homeName: string = homeComp.team?.displayName ?? '';
       const awayName: string = awayComp.team?.displayName ?? '';
       const eventDate: string = (event.date ?? '').slice(0, 10); // YYYY-MM-DD
       if (homeName && awayName && eventDate) {
-        const fallback = await query<{
+        const dateMatches = await query<{
           id: number; status: string; home_score: number | null;
           away_score: number | null; first_scorer_team: string | null;
+          home_team: string; away_team: string;
         }>(
-          `SELECT id, status, home_score, away_score, first_scorer_team
+          `SELECT id, status, home_score, away_score, first_scorer_team, home_team, away_team
            FROM matches
-           WHERE api_match_id IS NULL
-             AND home_team ILIKE $1 AND away_team ILIKE $2
-             AND DATE(kickoff_time_utc) BETWEEN ($3::date - interval '1 day') AND ($3::date + interval '1 day')
-           LIMIT 1`,
-          [homeName, awayName, eventDate]
+           WHERE DATE(kickoff_time_utc) BETWEEN ($1::date - interval '1 day') AND ($1::date + interval '1 day')`,
+          [eventDate]
         );
-        if (fallback.rows.length > 0) {
-          await query('UPDATE matches SET api_match_id = $1 WHERE id = $2', [espnId, fallback.rows[0].id]);
-          rows = fallback.rows;
-          logger.info(`Live sync: mapped ESPN ${espnId} (${homeName} vs ${awayName}) → match ${fallback.rows[0].id} by name`);
+        const matched = dateMatches.rows.find(m =>
+          normTeam(m.home_team) === normTeam(homeName) &&
+          normTeam(m.away_team) === normTeam(awayName)
+        );
+        if (matched) {
+          await query('UPDATE matches SET api_match_id = $1 WHERE id = $2', [espnId, matched.id]);
+          rows = [matched];
+          logger.info(`Live sync: mapped ESPN ${espnId} (${homeName} vs ${awayName}) → match ${matched.id} by name`);
         }
       }
     }
 
     if (rows.length === 0) {
-      logger.warn(`Live sync: no DB match for ESPN ${espnId} (${newStatus}) after id + name lookup`);
+      const hName = homeComp.team?.displayName ?? '?';
+      const aName = awayComp.team?.displayName ?? '?';
+      logger.warn(`Live sync: no DB match for ESPN ${espnId} "${hName} vs ${aName}" (${newStatus})`);
       continue;
     }
     const match = rows[0];
