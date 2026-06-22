@@ -132,11 +132,24 @@ export async function syncLiveScores(): Promise<void> {
     // The live→finished transition is handled on the first finished cron run below.
     if (match.status === 'finished' && newStatus === 'finished') continue;
 
-    // ESPN doesn't always provide goal play-by-play (e.g. Ecuador vs Curaçao had 0 scoring
-    // plays). Only trust ESPN's first_scorer_team when it has actual goal events.
-    // If ESPN has no goals, keep whatever is already in the DB.
+    // Determine first_scorer_team using "set once, never change" logic:
+    // Once we know who scored first, lock it in for the rest of the game.
+    // Primary: use ESPN play-by-play when available (most accurate).
+    // Fallback: infer from score — if someone is leading it means they scored first
+    //   (only works when score isn't tied; 1-1 at first poll = can't tell).
+    // If already set in DB, never overwrite it.
     const espnHasGoals = details.some((d: any) => d.scoringPlay === true);
-    const effectiveFirstScorer = espnHasGoals ? firstScorerTeam : (match.first_scorer_team ?? 'none');
+    let effectiveFirstScorer: string = match.first_scorer_team ?? 'none';
+    if (effectiveFirstScorer === 'none') {
+      if (espnHasGoals) {
+        effectiveFirstScorer = firstScorerTeam;
+      } else if (homeScore > awayScore) {
+        effectiveFirstScorer = 'home';
+      } else if (awayScore > homeScore) {
+        effectiveFirstScorer = 'away';
+      }
+      // If 0-0 or tied (1-1 etc.) and no ESPN goal data: leave as 'none'
+    }
 
     const unchanged =
       match.status === newStatus &&
