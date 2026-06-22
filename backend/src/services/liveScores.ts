@@ -127,20 +127,31 @@ export async function syncLiveScores(): Promise<void> {
     }
     const match = rows[0];
 
+    // Once a match is finished in the DB, don't let the cron overwrite it.
+    // This protects manual admin corrections to score/first_scorer_team after the whistle.
+    // The live→finished transition is handled on the first finished cron run below.
+    if (match.status === 'finished' && newStatus === 'finished') continue;
+
+    // ESPN doesn't always provide goal play-by-play (e.g. Ecuador vs Curaçao had 0 scoring
+    // plays). Only trust ESPN's first_scorer_team when it has actual goal events.
+    // If ESPN has no goals, keep whatever is already in the DB.
+    const espnHasGoals = details.some((d: any) => d.scoringPlay === true);
+    const effectiveFirstScorer = espnHasGoals ? firstScorerTeam : (match.first_scorer_team ?? 'none');
+
     const unchanged =
       match.status === newStatus &&
       match.home_score === homeScore &&
       match.away_score === awayScore &&
-      match.first_scorer_team === firstScorerTeam;
+      (match.first_scorer_team ?? 'none') === effectiveFirstScorer;
     if (unchanged) continue;
 
     await query(
       `UPDATE matches SET home_score=$1, away_score=$2, first_scorer_team=$3,
        status=$4, last_updated=NOW() WHERE id=$5`,
-      [homeScore, awayScore, firstScorerTeam, newStatus, match.id]
+      [homeScore, awayScore, effectiveFirstScorer, newStatus, match.id]
     );
 
-    logger.info(`Live sync: match ${match.id} → ${newStatus} (${homeScore}–${awayScore})`);
+    logger.info(`Live sync: match ${match.id} → ${newStatus} (${homeScore}–${awayScore}, first=${effectiveFirstScorer})`);
 
     if (newStatus === 'finished') {
       await calculateMatchScores(match.id);
