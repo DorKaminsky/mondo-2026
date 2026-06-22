@@ -13,10 +13,15 @@ leaderboardRouter.get('/', authenticate, async (req: Request, res: Response) => 
     return;
   }
   // Anyone in the league competes (players AND super_admins who set league_id),
-  // except admins (league moderators) — they oversee but don't compete.
+  // EXCEPT:
+  //   - admins (league moderators) — they oversee but don't compete
+  //   - mock accounts (is_mock = true, e.g. ISRAEL) — used as reference
+  //     "average bettor" but not a real friend, so excluded from ranking.
+  //     Their predictions still show on match pages and in stats.
   interface BoardRow {
     id: number; name: string; total_points: number; pre_tournament_points: number;
-    group_stage_points: number; knockout_points: number; perfect_matches_count: number; rank: number;
+    group_stage_points: number; knockout_points: number; perfect_matches_count: number;
+    rank: number; is_mock?: boolean;
   }
   const { rows } = await query<BoardRow>(
     `SELECT
@@ -26,8 +31,22 @@ leaderboardRouter.get('/', authenticate, async (req: Request, res: Response) => 
        RANK() OVER (ORDER BY s.total_points DESC, s.perfect_matches_count DESC) AS rank
      FROM scores s
      JOIN users u ON s.user_id = u.id
-     WHERE u.league_id = $1 AND u.role != 'admin'
+     WHERE u.league_id = $1 AND u.role != 'admin' AND u.is_mock = false
      ORDER BY s.total_points DESC, s.perfect_matches_count DESC`,
+    [leagueId]
+  );
+
+  // Mock account(s) in this league, returned separately so the standings UI
+  // can pin them above the real ranking as a non-competing reference card.
+  const { rows: mocks } = await query<BoardRow>(
+    `SELECT
+       u.id, u.name,
+       s.total_points, s.pre_tournament_points, s.group_stage_points,
+       s.knockout_points, s.perfect_matches_count
+     FROM scores s
+     JOIN users u ON s.user_id = u.id
+     WHERE u.league_id = $1 AND u.is_mock = true
+     ORDER BY s.total_points DESC`,
     [leagueId]
   );
 
@@ -37,7 +56,7 @@ leaderboardRouter.get('/', authenticate, async (req: Request, res: Response) => 
   );
 
   if (liveMatches.length === 0) {
-    res.json({ leaderboard: rows, currentUserId: req.user!.id, isLive: false });
+    res.json({ leaderboard: rows, mocks, currentUserId: req.user!.id, isLive: false });
     return;
   }
 
@@ -72,7 +91,14 @@ leaderboardRouter.get('/', authenticate, async (req: Request, res: Response) => 
     )
     .map((entry, i) => ({ ...entry, rank: i + 1 }));
 
-  res.json({ leaderboard, currentUserId: req.user!.id, isLive: true });
+  // Mocks get a provisional total too (shown on the floating card) but no rank.
+  const mocksWithLive = mocks.map(entry => ({
+    ...entry,
+    provisional_total: Number(entry.total_points) + (provisionalDelta.get(entry.id) ?? 0),
+    provisional_delta: provisionalDelta.get(entry.id) ?? 0,
+  }));
+
+  res.json({ leaderboard, mocks: mocksWithLive, currentUserId: req.user!.id, isLive: true });
 });
 
 // Public-within-league player profile.
@@ -191,7 +217,7 @@ leaderboardRouter.get('/summary', authenticate, async (req: Request, res: Respon
        u.last_seen_at,
        u.name,
        (SELECT COUNT(*) + 1 FROM scores s2 JOIN users u2 ON u2.id = s2.user_id
-          WHERE u2.league_id = $2 AND u2.role != 'admin'
+          WHERE u2.league_id = $2 AND u2.role != 'admin' AND u2.is_mock = false
             AND (s2.total_points > COALESCE(s.total_points, 0)
                  OR (s2.total_points = COALESCE(s.total_points, 0)
                      AND COALESCE(s2.perfect_matches_count, 0) > COALESCE(s.perfect_matches_count, 0)))
@@ -223,7 +249,7 @@ leaderboardRouter.get('/summary', authenticate, async (req: Request, res: Respon
                                   COALESCE(s.perfect_matches_count, 0) DESC) AS rnk
        FROM users u
        LEFT JOIN scores s ON s.user_id = u.id
-      WHERE u.league_id = $1 AND u.role != 'admin'
+      WHERE u.league_id = $1 AND u.role != 'admin' AND u.is_mock = false
       ORDER BY rnk ASC`,
     [leagueId]
   );
@@ -295,7 +321,7 @@ leaderboardRouter.get('/player-stats', authenticate, async (req: Request, res: R
      LEFT JOIN scores s ON s.user_id = u.id
      LEFT JOIN match_predictions mp ON mp.user_id = u.id
      LEFT JOIN matches m ON m.id = mp.match_id
-     WHERE u.league_id = $1 AND u.role != 'admin'
+     WHERE u.league_id = $1 AND u.role != 'admin' AND u.is_mock = false
      GROUP BY u.id, u.name, s.total_points, s.perfect_matches_count,
               s.group_stage_points, s.knockout_points
      ORDER BY s.total_points DESC NULLS LAST`,
@@ -321,7 +347,7 @@ leaderboardRouter.get('/rank-history', authenticate, async (req: Request, res: R
          FROM match_predictions mp
          JOIN matches m ON m.id = mp.match_id
          JOIN users u ON u.id = mp.user_id
-        WHERE u.league_id = $1 AND u.role != 'admin'
+        WHERE u.league_id = $1 AND u.role != 'admin' AND u.is_mock = false
           AND m.status = 'finished' AND mp.points_earned IS NOT NULL
      ),
      cum AS (

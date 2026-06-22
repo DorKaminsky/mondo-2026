@@ -18,6 +18,7 @@ export function LeaderboardPage() {
   if (isLoading) return <div className="loading"><div className="spinner" /></div>;
 
   const board = data?.leaderboard ?? [];
+  const mocks = data?.mocks ?? [];
   const isLive = data?.isLive ?? false;
   const top3 = board.slice(0, 3);
   const rest = board.slice(3);
@@ -92,6 +93,56 @@ export function LeaderboardPage() {
 
   return (
     <div className="page">
+      {/* Floating mock-account card(s). Not part of the ranking — just a
+          reference "average bettor" pinned at the top so real players can
+          see how they're doing vs the mock baseline. */}
+      {mocks.map(m => {
+        const displayPts = isLive ? (m.provisional_total ?? m.total_points) : m.total_points;
+        return (
+          <div
+            key={`mock-${m.id}`}
+            onClick={() => goToPlayer(m.id)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '10px 14px',
+              marginBottom: 12,
+              borderRadius: 12,
+              background: 'rgba(255,255,255,0.10)',
+              border: '1.5px dashed rgba(255,255,255,0.35)',
+              cursor: 'pointer',
+            }}
+          >
+            <div style={{
+              width: 36, height: 36, borderRadius: '50%',
+              background: 'rgba(255,255,255,0.18)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 18,
+            }}>🤖</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontWeight: 700, fontSize: 14, color: 'white' }}>{m.name}</span>
+                <span style={{
+                  fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                  background: 'rgba(255,255,255,0.2)',
+                  color: 'rgba(255,255,255,0.9)',
+                  padding: '2px 6px', borderRadius: 999,
+                }}>Mock · not competing</span>
+              </div>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 2 }}>
+                Reference bettor. Predictions visible elsewhere, not ranked here.
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontWeight: 800, fontSize: 16, color: isLive ? '#e8a020' : 'white' }}>
+                {isLive ? '~' : ''}{displayPts}
+              </div>
+              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.6)' }}>pts</div>
+            </div>
+          </div>
+        );
+      })}
+
       {/* Hero podium */}
       <div className="hero" style={{ padding: '20px 20px 28px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>

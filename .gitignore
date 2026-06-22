@@ -30,3 +30,4 @@ Thumbs.db
 /tmp/uploads/
 coverage/
 .cache/
+.vercel
