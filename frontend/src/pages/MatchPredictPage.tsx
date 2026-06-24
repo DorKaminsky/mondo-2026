@@ -179,14 +179,17 @@ export function MatchPredictPage() {
   const now = new Date();
   const currentKickoff = new Date(match.kickoff_time_utc).getTime();
   const nextMatch = (allMatches ?? [])
-    .filter(m =>
-      m.id !== Number(matchId) &&
-      m.status === 'scheduled' &&
-      !m.home_team.startsWith('TBD') &&
-      !m.away_team.startsWith('TBD') &&
-      new Date(m.kickoff_time_utc).getTime() >= currentKickoff &&
-      new Date(m.kickoff_time_utc).getTime() - 60 * 60 * 1000 > now.getTime()
-    )
+    .filter(m => {
+      const t = new Date(m.kickoff_time_utc).getTime();
+      return (
+        m.status === 'scheduled' &&
+        !m.home_team.startsWith('TBD') &&
+        !m.away_team.startsWith('TBD') &&
+        t - 60 * 60 * 1000 > now.getTime() &&
+        // strictly later kickoff, OR same kickoff with a higher id (never loop back)
+        (t > currentKickoff || (t === currentKickoff && m.id > Number(matchId)))
+      );
+    })
     .sort((a, b) => {
       const tDiff = new Date(a.kickoff_time_utc).getTime() - new Date(b.kickoff_time_utc).getTime();
       return tDiff !== 0 ? tDiff : a.id - b.id;
