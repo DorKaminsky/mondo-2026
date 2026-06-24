@@ -33,6 +33,11 @@ predictionsRouter.post('/', authenticate, async (req: Request, res: Response) =>
   if (matchRows.length === 0) { res.status(404).json({ error: 'Match not found' }); return; }
   const match = matchRows[0];
 
+  if (match.home_team.startsWith('TBD') || match.away_team.startsWith('TBD')) {
+    res.status(403).json({ error: 'Teams not yet determined — predictions open once bracket is set' });
+    return;
+  }
+
   const deadline = getDeadline(new Date(match.kickoff_time_utc));
   if (new Date() > deadline) {
     res.status(403).json({ error: 'Prediction deadline has passed' });

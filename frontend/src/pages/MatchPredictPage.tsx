@@ -165,7 +165,8 @@ export function MatchPredictPage() {
   }
 
   const deadline = subHours(new Date(match.kickoff_time_utc), 1);
-  const isPast = new Date() > deadline || match.status !== 'scheduled';
+  const isTbd = match.home_team.startsWith('TBD') || match.away_team.startsWith('TBD');
+  const isPast = isTbd || new Date() > deadline || match.status !== 'scheduled';
   const pts = match.round === 'group' ? '2 pts' : '3 pts';
   const homeClr = teamColor(match.home_team);
   const awayClr = teamColor(match.away_team);
@@ -183,10 +184,13 @@ export function MatchPredictPage() {
       m.status === 'scheduled' &&
       !m.home_team.startsWith('TBD') &&
       !m.away_team.startsWith('TBD') &&
-      new Date(m.kickoff_time_utc).getTime() > currentKickoff &&
+      new Date(m.kickoff_time_utc).getTime() >= currentKickoff &&
       new Date(m.kickoff_time_utc).getTime() - 60 * 60 * 1000 > now.getTime()
     )
-    .sort((a, b) => new Date(a.kickoff_time_utc).getTime() - new Date(b.kickoff_time_utc).getTime())[0] ?? null;
+    .sort((a, b) => {
+      const tDiff = new Date(a.kickoff_time_utc).getTime() - new Date(b.kickoff_time_utc).getTime();
+      return tDiff !== 0 ? tDiff : a.id - b.id;
+    })[0] ?? null;
   // Keep the ref synced for the mutation callback (which runs after async settle)
   nextMatchAtSubmit.current = nextMatch?.id ?? null;
 
@@ -246,8 +250,8 @@ export function MatchPredictPage() {
             </div>
           </div>
 
-          {!isPast && <div style={{ textAlign: 'center', marginTop: 12 }}><Countdown deadline={deadline} /></div>}
-          {!isPast && (
+          {!isPast && !isTbd && <div style={{ textAlign: 'center', marginTop: 12 }}><Countdown deadline={deadline} /></div>}
+          {!isPast && !isTbd && (
             <div style={{ textAlign: 'center', marginTop: 10 }}>
               <CalendarReminder
                 matchId={match.id}
@@ -262,11 +266,13 @@ export function MatchPredictPage() {
 
       {isPast && (
         <div className="alert alert-warning" style={{ marginTop: 0, background: match.status === 'live' ? 'rgba(232,160,32,0.15)' : undefined }}>
-          {match.status === 'finished'
-            ? `Final score: ${match.home_score} – ${match.away_score}`
-            : match.status === 'live'
-              ? '🔴 Match in progress — predictions are locked'
-              : '⚠️ Prediction deadline has passed'}
+          {isTbd
+            ? '⏳ Teams not yet determined — predictions open once the bracket is set'
+            : match.status === 'finished'
+              ? `Final score: ${match.home_score} – ${match.away_score}`
+              : match.status === 'live'
+                ? '🔴 Match in progress — predictions are locked'
+                : '⚠️ Prediction deadline has passed'}
         </div>
       )}
 
