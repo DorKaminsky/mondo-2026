@@ -66,20 +66,85 @@ export async function syncMatchPlayerStats(espnEventId: string): Promise<void> {
   logger.info(`Player stats: synced ESPN event ${espnEventId}`);
 }
 
+// Normalize team names to match ESPN/FIFA aliases.
+// Kept in sync with liveScores.ts — duplicated here to keep the module standalone.
+const TEAM_ALIASES: Record<string, string> = {
+  'united states': 'usa',
+  'ivory coast': "côte d'ivoire",
+  'south korea': 'korea republic',
+  'republic of korea': 'korea republic',
+  'iran': 'ir iran',
+  'czech republic': 'czechia',
+  'cape verde': 'cabo verde',
+  'democratic republic of the congo': 'congo dr',
+  'dr congo': 'congo dr',
+};
+function normTeam(name: string): string {
+  const lower = name.toLowerCase().trim();
+  return TEAM_ALIASES[lower] ?? lower;
+}
+function yyyymmdd(d: Date): string {
+  return d.toISOString().slice(0, 10).replace(/-/g, '');
+}
+const ESPN_SCOREBOARD = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard';
+
+// Many finished matches in DB still have FIFA-seeded api_match_ids (400021xxx)
+// rather than ESPN ids (760xxx). Walk ESPN's scoreboard per kickoff date, map by
+// team name, and overwrite api_match_id. Then sync player stats per match.
 export async function backfillAllFinishedMatches(): Promise<void> {
-  const { rows } = await query<{ api_match_id: string }>(
-    `SELECT api_match_id FROM matches
-     WHERE status = 'finished' AND api_match_id IS NOT NULL`
+  const { rows: matches } = await query<{
+    id: number; api_match_id: string | null;
+    home_team: string; away_team: string; kickoff_time_utc: Date;
+  }>(
+    `SELECT id, api_match_id, home_team, away_team, kickoff_time_utc
+       FROM matches
+      WHERE status = 'finished'`
   );
 
-  logger.info(`Player stats backfill: ${rows.length} finished matches`);
-  for (const { api_match_id } of rows) {
+  logger.info(`Player stats backfill: ${matches.length} finished matches`);
+
+  // Group matches by kickoff date so we fetch each ESPN scoreboard only once
+  const byDate = new Map<string, typeof matches>();
+  for (const m of matches) {
+    const date = yyyymmdd(new Date(m.kickoff_time_utc));
+    if (!byDate.has(date)) byDate.set(date, []);
+    byDate.get(date)!.push(m);
+  }
+
+  for (const [date, dayMatches] of byDate.entries()) {
+    let events: any[] = [];
     try {
-      await syncMatchPlayerStats(api_match_id);
+      const { data } = await axios.get(`${ESPN_SCOREBOARD}?dates=${date}`, { timeout: 10_000 });
+      events = data?.events ?? [];
     } catch (err) {
-      logger.warn(`Player stats backfill: failed for ESPN event ${api_match_id}`, { err });
+      logger.warn(`Player stats backfill: ESPN scoreboard fetch failed for ${date}`, { err });
+      continue;
+    }
+
+    for (const m of dayMatches) {
+      const matched = events.find((e: any) => {
+        const comp = e.competitions?.[0];
+        const home = comp?.competitors?.find((c: any) => c.homeAway === 'home')?.team?.displayName ?? '';
+        const away = comp?.competitors?.find((c: any) => c.homeAway === 'away')?.team?.displayName ?? '';
+        return normTeam(home) === normTeam(m.home_team) && normTeam(away) === normTeam(m.away_team);
+      });
+      if (!matched) {
+        logger.warn(`Player stats backfill: no ESPN event for match ${m.id} (${m.home_team} vs ${m.away_team}) on ${date}`);
+        continue;
+      }
+      const espnId = String(matched.id);
+      if (m.api_match_id !== espnId) {
+        await query('UPDATE matches SET api_match_id = $1 WHERE id = $2', [espnId, m.id]);
+        logger.info(`Player stats backfill: mapped match ${m.id} → ESPN ${espnId}`);
+      }
+      try {
+        await syncMatchPlayerStats(espnId);
+      } catch (err) {
+        logger.warn(`Player stats backfill: sync failed for match ${m.id} (ESPN ${espnId})`, { err });
+      }
     }
   }
+
   logger.info('Player stats backfill: complete');
 }
 
