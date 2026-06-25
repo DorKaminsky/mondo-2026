@@ -33,6 +33,8 @@ const TEAM_ALIASES: Record<string, string> = {
   'cape verde': 'cabo verde',
   'democratic republic of the congo': 'congo dr',
   'dr congo': 'congo dr',
+  'bosnia-herzegovina': 'bosnia and herzegovina',
+  'bosnia & herzegovina': 'bosnia and herzegovina',
 };
 function normTeam(name: string): string {
   const lower = name.toLowerCase().trim();
