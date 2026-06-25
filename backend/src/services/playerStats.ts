@@ -133,7 +133,10 @@ export async function backfillAllFinishedMatches(): Promise<void> {
   // re-running this endpoint doesn't double-count goals/assists.
   await query('DELETE FROM player_stats');
 
-  // Group matches by kickoff date so we fetch each ESPN scoreboard only once
+  // Group matches by kickoff date so we fetch each ESPN scoreboard only once.
+  // ESPN groups events by US local date, so a 01:00 UTC kickoff on June 17
+  // lives under dates=20260616. Fetch BOTH the kickoff-date and the day before,
+  // then match by team-name regardless of which bucket the event landed in.
   const byDate = new Map<string, typeof matches>();
   for (const m of matches) {
     const date = yyyymmdd(new Date(m.kickoff_time_utc));
@@ -141,15 +144,29 @@ export async function backfillAllFinishedMatches(): Promise<void> {
     byDate.get(date)!.push(m);
   }
 
-  for (const [date, dayMatches] of byDate.entries()) {
-    let events: any[] = [];
+  // Fetch each date and date-1 once, cache the events
+  const eventsByDate = new Map<string, any[]>();
+  const datesNeeded = new Set<string>();
+  for (const date of byDate.keys()) {
+    datesNeeded.add(date);
+    const prev = new Date(`${date.slice(0,4)}-${date.slice(4,6)}-${date.slice(6,8)}T00:00:00Z`);
+    prev.setUTCDate(prev.getUTCDate() - 1);
+    datesNeeded.add(yyyymmdd(prev));
+  }
+  for (const date of datesNeeded) {
     try {
       const { data } = await axios.get(`${ESPN_SCOREBOARD}?dates=${date}`, { timeout: 10_000 });
-      events = data?.events ?? [];
+      eventsByDate.set(date, data?.events ?? []);
     } catch (err) {
       logger.warn(`Player stats backfill: ESPN scoreboard fetch failed for ${date}`, { err });
-      continue;
+      eventsByDate.set(date, []);
     }
+  }
+
+  for (const [date, dayMatches] of byDate.entries()) {
+    const prev = new Date(`${date.slice(0,4)}-${date.slice(4,6)}-${date.slice(6,8)}T00:00:00Z`);
+    prev.setUTCDate(prev.getUTCDate() - 1);
+    const events = [...(eventsByDate.get(date) ?? []), ...(eventsByDate.get(yyyymmdd(prev)) ?? [])];
 
     for (const m of dayMatches) {
       const matched = events.find((e: any) => {
