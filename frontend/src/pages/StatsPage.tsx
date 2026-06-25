@@ -331,6 +331,16 @@ export function StatsPage() {
     queryFn: () => leaderboardApi.tournamentStats(),
   });
 
+  // Player-picks modal: when user clicks a row, we fetch which league members
+  // picked that player as their pre-tournament top scorer/assister. Backend
+  // gates this on deadline so the 403 path here just leaves the modal empty.
+  const [picksOpen, setPicksOpen] = useState<{ name: string; kind: 'scorer' | 'assister' } | null>(null);
+  const { data: picks, isLoading: picksLoading } = useQuery({
+    queryKey: ['player-picks', picksOpen?.name, picksOpen?.kind],
+    queryFn: () => leaderboardApi.playerPicks(picksOpen!.name, picksOpen!.kind),
+    enabled: picksOpen !== null,
+  });
+
   if (isLoading) return <div className="loading"><div className="spinner" /></div>;
 
   const raw = data?.stats ?? [];
@@ -374,7 +384,11 @@ export function StatsPage() {
                 </thead>
                 <tbody>
                   {tournamentData.topScorers.map((p, i) => (
-                    <tr key={p.espn_athlete_id} style={{ borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
+                    <tr
+                      key={p.espn_athlete_id}
+                      onClick={() => setPicksOpen({ name: p.full_name, kind: 'scorer' })}
+                      style={{ borderTop: i > 0 ? '1px solid var(--border)' : 'none', cursor: 'pointer' }}
+                    >
                       <td style={{ padding: '8px 14px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ fontSize: 16 }}>{flag(p.team_name)}</span>
@@ -402,7 +416,11 @@ export function StatsPage() {
                 </thead>
                 <tbody>
                   {tournamentData.topAssisters.map((p, i) => (
-                    <tr key={p.espn_athlete_id} style={{ borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
+                    <tr
+                      key={p.espn_athlete_id}
+                      onClick={() => setPicksOpen({ name: p.full_name, kind: 'assister' })}
+                      style={{ borderTop: i > 0 ? '1px solid var(--border)' : 'none', cursor: 'pointer' }}
+                    >
                       <td style={{ padding: '8px 14px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ fontSize: 16 }}>{flag(p.team_name)}</span>
@@ -495,6 +513,56 @@ export function StatsPage() {
 
           {rankData && <RankChart data={rankData} />}
         </>
+      )}
+
+      {picksOpen && (
+        <div
+          onClick={() => setPicksOpen(null)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="card"
+            style={{ width: '100%', maxWidth: 360, padding: 0, overflow: 'hidden' }}
+          >
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
+                  Picked as top {picksOpen.kind}
+                </div>
+                <div style={{ fontWeight: 800, fontSize: 15, marginTop: 2 }}>{picksOpen.name}</div>
+              </div>
+              <button
+                onClick={() => setPicksOpen(null)}
+                style={{ background: 'transparent', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}
+              >×</button>
+            </div>
+            <div style={{ padding: 16, maxHeight: '60vh', overflowY: 'auto' }}>
+              {picksLoading && <div className="text-muted" style={{ fontSize: 13, textAlign: 'center' }}>Loading…</div>}
+              {!picksLoading && (!picks || picks.length === 0) && (
+                <div className="text-muted" style={{ fontSize: 13, textAlign: 'center' }}>No one in your league picked this player.</div>
+              )}
+              {!picksLoading && picks && picks.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {picks.map(u => (
+                    <Link
+                      key={u.id}
+                      to={`/player/${u.id}`}
+                      onClick={() => setPicksOpen(null)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'inherit', padding: '6px 4px' }}
+                    >
+                      <div className="avatar" style={{ background: avatarColor(u.name), width: 30, height: 30, fontSize: 11, flexShrink: 0 }}>{initials(u.name)}</div>
+                      <span style={{ fontWeight: 600, fontSize: 13 }}>{u.name}</span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

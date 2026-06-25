@@ -403,6 +403,45 @@ leaderboardRouter.get('/tournament-stats', async (_req: Request, res: Response) 
   res.json({ topScorers, topAssisters });
 });
 
+// Returns which league members picked a given player as their pre-tournament
+// top scorer or top assister. Gated by the pre-tournament deadline so we don't
+// leak picks during the open window. Same-league scoping so users can only
+// see their own league's picks.
+leaderboardRouter.get('/player-picks', authenticate, async (req: Request, res: Response) => {
+  const leagueId = req.user!.league_id;
+  if (!leagueId) { res.json({ picks: [] }); return; }
+
+  const name = String(req.query.name ?? '').trim();
+  const kind = String(req.query.kind ?? '');
+  if (!name) { res.status(400).json({ error: 'name is required' }); return; }
+  if (kind !== 'scorer' && kind !== 'assister') {
+    res.status(400).json({ error: 'kind must be "scorer" or "assister"' });
+    return;
+  }
+
+  const { rows: deadlineRows } = await query(
+    "SELECT value FROM system_settings WHERE key = 'pre_tournament_deadline'"
+  );
+  const deadline = new Date(String(deadlineRows[0]?.value ?? '2026-06-11T13:00:00Z'));
+  if (new Date() < deadline) {
+    res.status(403).json({ error: 'Pre-tournament deadline has not passed' });
+    return;
+  }
+
+  const column = kind === 'scorer' ? 'top_scorer_name' : 'top_assister_name';
+  const { rows } = await query<{ id: number; name: string }>(
+    `SELECT u.id, u.name
+       FROM pre_tournament_predictions p
+       JOIN users u ON u.id = p.user_id
+      WHERE u.league_id = $1
+        AND u.role != 'admin'
+        AND LOWER(TRIM(p.${column})) = LOWER($2)
+      ORDER BY u.name`,
+    [leagueId, name]
+  );
+  res.json({ picks: rows });
+});
+
 leaderboardRouter.get('/stats', authenticate, async (req: Request, res: Response) => {
   const leagueId = req.user!.league_id;
   if (!leagueId) {
