@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { applyDefaultPredictions } from '../services/scoring';
 import { syncLiveScores } from '../services/liveScores';
+import { sendDailySummaryToAll } from '../services/push';
 import { query } from '../db/pool';
 import { logger } from '../utils/logger';
 
@@ -69,6 +70,16 @@ export function startJobs() {
       if (!await isInMatchWindow()) await syncLiveScores();
     } catch (err) {
       logger.error('Live score sync (idle) failed', { err });
+    }
+  });
+
+  // Daily push notification: 12:30 Israel time = 09:30 UTC (Israel is UTC+3, no DST).
+  // Sends every subscribed user a personalised summary of today's matches.
+  cron.schedule('30 9 * * *', async () => {
+    try {
+      await sendDailySummaryToAll();
+    } catch (err) {
+      logger.error('Daily push summary failed', { err });
     }
   });
 

@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './contexts/AuthContext';
 import App from './App';
+import { registerSW } from './utils/push';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -23,3 +24,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </React.StrictMode>
 );
+
+// Fire-and-forget — pre-register so push events deliver before any subscribe flow
+registerSW();

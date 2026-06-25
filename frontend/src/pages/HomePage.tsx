@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Match, MatchPrediction } from '../types';
 import { flag, teamColor, avatarColor, localTimezoneLabel } from '../utils/flags';
 import { InstallPrompt } from '../components/InstallPrompt';
+import { PushOnboarding } from '../components/PushOnboarding';
 
 function MatchCard({ match, compact, myPrediction }: { match: Match; compact?: boolean; myPrediction?: MatchPrediction }) {
   const homeClr = teamColor(match.home_team);
@@ -326,6 +327,7 @@ export function HomePage() {
   return (
     <div className="page">
       <InstallPrompt />
+      <PushOnboarding />
 
       {/* ── "Since last visit" banner ───────────────── */}
       {summary && summary.pointsSinceLastVisit > 0 && (

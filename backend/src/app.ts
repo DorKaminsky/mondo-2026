@@ -11,6 +11,7 @@ import { preTournamentRouter } from './routes/preTournament';
 import { leaderboardRouter } from './routes/leaderboard';
 import { adminRouter } from './routes/admin';
 import { leaguesRouter } from './routes/leagues';
+import { pushRouter } from './routes/push';
 
 export const app = express();
 
@@ -39,6 +40,7 @@ app.use('/api/pre-tournament', preTournamentRouter);
 app.use('/api/leaderboard', leaderboardRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/leagues', leaguesRouter);
+app.use('/api/push', pushRouter);
 
 app.use(notFound);
 app.use(errorHandler);
