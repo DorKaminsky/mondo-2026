@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { query } from '../db/pool';
 import { authenticate } from '../middleware/auth';
 import { scorePrediction } from '../services/scoring';
+import { getTopScorers, getTopAssisters } from '../services/playerStats';
 import { Match, MatchPrediction } from '../types';
 
 export const leaderboardRouter = Router();
@@ -392,6 +393,14 @@ leaderboardRouter.get('/rank-history', authenticate, async (req: Request, res: R
   }));
 
   res.json({ matches, players });
+});
+
+leaderboardRouter.get('/tournament-stats', async (_req: Request, res: Response) => {
+  const [topScorers, topAssisters] = await Promise.all([
+    getTopScorers(5),
+    getTopAssisters(5),
+  ]);
+  res.json({ topScorers, topAssisters });
 });
 
 leaderboardRouter.get('/stats', authenticate, async (req: Request, res: Response) => {

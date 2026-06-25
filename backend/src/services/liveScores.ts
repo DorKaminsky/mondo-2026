@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { query } from '../db/pool';
 import { calculateMatchScores } from './scoring';
+import { syncMatchPlayerStats } from './playerStats';
 import { logger } from '../utils/logger';
 
 const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard';
@@ -169,6 +170,13 @@ export async function syncLiveScores(): Promise<void> {
     if (newStatus === 'finished') {
       await calculateMatchScores(match.id);
       logger.info(`Live sync: scored match ${match.id}`);
+      if (espnId) {
+        try {
+          await syncMatchPlayerStats(espnId);
+        } catch (err) {
+          logger.warn(`Live sync: player stats failed for match ${match.id}`, { err });
+        }
+      }
     }
   }
 }

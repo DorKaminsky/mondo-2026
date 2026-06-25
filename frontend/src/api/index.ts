@@ -114,6 +114,11 @@ export const leaderboardApi = {
         correct_goal_diffs: number;
       }>;
     }>('/leaderboard/player-stats').then(r => r.data),
+  tournamentStats: () =>
+    api.get<{
+      topScorers: Array<{ espn_athlete_id: string; full_name: string; team_name: string; goals: number; assists: number; matches_played: number }>;
+      topAssisters: Array<{ espn_athlete_id: string; full_name: string; team_name: string; goals: number; assists: number; matches_played: number }>;
+    }>('/leaderboard/tournament-stats').then(r => r.data),
   rankHistory: () =>
     api.get<{
       matches: { id: number; label: string; kickoff: string }[];

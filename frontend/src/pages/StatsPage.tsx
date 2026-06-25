@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { leaderboardApi } from '../api';
-import { avatarColor, initials } from '../utils/flags';
+import { avatarColor, initials, flag } from '../utils/flags';
 
 type RawStat = {
   id: number; name: string;
@@ -326,6 +326,11 @@ export function StatsPage() {
     queryFn: () => leaderboardApi.rankHistory(),
   });
 
+  const { data: tournamentData } = useQuery({
+    queryKey: ['tournament-stats'],
+    queryFn: () => leaderboardApi.tournamentStats(),
+  });
+
   if (isLoading) return <div className="loading"><div className="spinner" /></div>;
 
   const raw = data?.stats ?? [];
@@ -352,6 +357,70 @@ export function StatsPage() {
     <div className="page">
       <h2 style={{ color: 'white', marginBottom: 4, fontSize: 22 }}>League Stats</h2>
       <p className="text-muted text-xs" style={{ marginBottom: 20 }}>Based on finished matches only</p>
+
+      {/* ── Tournament Top Scorers / Assisters ── */}
+      {tournamentData && (tournamentData.topScorers.length > 0 || tournamentData.topAssisters.length > 0) && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontWeight: 800, fontSize: 14, color: 'white', marginBottom: 10 }}>🌍 WC2026 Player Stats</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+              <div style={{ padding: '10px 14px', fontWeight: 800, fontSize: 13, borderBottom: '1px solid var(--border)' }}>⚽ Top Scorers</div>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: 'rgba(0,0,0,0.04)' }}>
+                    <th style={{ textAlign: 'left', padding: '6px 14px', fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Player</th>
+                    <th style={{ textAlign: 'right', padding: '6px 14px', fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>G</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tournamentData.topScorers.map((p, i) => (
+                    <tr key={p.espn_athlete_id} style={{ borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
+                      <td style={{ padding: '8px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 16 }}>{flag(p.team_name)}</span>
+                          <span style={{ fontSize: 12, fontWeight: 600 }}>{p.full_name}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: '8px 14px', textAlign: 'right', fontWeight: 800, fontSize: 14, color: 'var(--primary)' }}>{p.goals}</td>
+                    </tr>
+                  ))}
+                  {tournamentData.topScorers.length === 0 && (
+                    <tr><td colSpan={2} style={{ padding: '12px 14px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>No goals yet</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+              <div style={{ padding: '10px 14px', fontWeight: 800, fontSize: 13, borderBottom: '1px solid var(--border)' }}>🎯 Top Assisters</div>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: 'rgba(0,0,0,0.04)' }}>
+                    <th style={{ textAlign: 'left', padding: '6px 14px', fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Player</th>
+                    <th style={{ textAlign: 'right', padding: '6px 14px', fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>A</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tournamentData.topAssisters.map((p, i) => (
+                    <tr key={p.espn_athlete_id} style={{ borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
+                      <td style={{ padding: '8px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 16 }}>{flag(p.team_name)}</span>
+                          <span style={{ fontSize: 12, fontWeight: 600 }}>{p.full_name}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: '8px 14px', textAlign: 'right', fontWeight: 800, fontSize: 14, color: '#2196f3' }}>{p.assists}</td>
+                    </tr>
+                  ))}
+                  {tournamentData.topAssisters.length === 0 && (
+                    <tr><td colSpan={2} style={{ padding: '12px 14px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>No assists yet</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!anyFinished ? (
         <div className="card" style={{ textAlign: 'center', padding: 32 }}>

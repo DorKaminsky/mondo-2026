@@ -3,6 +3,7 @@ import Joi from 'joi';
 import { query } from '../db/pool';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { calculateMatchScores, calculatePreTournamentScores } from '../services/scoring';
+import { backfillAllFinishedMatches } from '../services/playerStats';
 
 export const adminRouter = Router();
 adminRouter.use(authenticate, requireAdmin);
@@ -159,6 +160,14 @@ adminRouter.get('/dashboard', async (req: Request, res: Response) => {
     matches: matchesRes.rows[0],
     leagues: leaguesRes.rows[0],
   });
+});
+
+// ── Player Stats Backfill ────────────────────────────────────────────────────
+
+adminRouter.post('/player-stats/backfill', async (_req: Request, res: Response) => {
+  await backfillAllFinishedMatches();
+  const { rows } = await query<{ count: string }>('SELECT COUNT(*) AS count FROM player_stats');
+  res.json({ message: 'Backfill complete', players: parseInt(rows[0].count, 10) });
 });
 
 // ── Pre-tournament Result Entry ─────────────────────────────────────────────
