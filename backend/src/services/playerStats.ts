@@ -4,9 +4,6 @@ import { logger } from '../utils/logger';
 
 const ESPN_SUMMARY = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary';
 
-// ESPN shortDisplayValue format: "M: 2, G: 1: A: 0"
-const STAT_RE = /M:\s*(\d+)[,\s]+G:\s*(\d+)[:\s]+A:\s*(\d+)/i;
-
 interface PlayerStatRow {
   espn_athlete_id: string;
   full_name: string;
@@ -16,54 +13,83 @@ interface PlayerStatRow {
   matches_played: number;
 }
 
+// Per-match delta extracted from ESPN keyEvents
+interface PlayerDelta {
+  full_name: string;
+  team_name: string;
+  goals: number;
+  assists: number;
+  played: boolean;
+}
+
+// ESPN summary "leaders" gives per-match shot/pass leaders, not goals/assists.
+// The reliable per-match goal/assist data lives in keyEvents:
+//   type.type starts with 'goal' (e.g. 'goal', 'goal---header') — EXCLUDES 'own-goal'
+//   participants[0] = scorer, participants[1] (optional) = assister
+// We accumulate deltas per match then UPSERT additively. matches_played is
+// incremented once per athlete per match (set membership from all key events).
 export async function syncMatchPlayerStats(espnEventId: string): Promise<void> {
   const { data } = await axios.get(ESPN_SUMMARY, {
     params: { event: espnEventId },
     timeout: 10_000,
   });
 
-  const leaders: any[] = data?.leaders ?? [];
-  if (leaders.length === 0) return;
+  const keyEvents: any[] = data?.keyEvents ?? [];
+  if (keyEvents.length === 0) {
+    logger.info(`Player stats: ESPN event ${espnEventId} has no keyEvents`);
+    return;
+  }
 
-  for (const teamLeader of leaders) {
-    const teamName: string = teamLeader?.team?.displayName ?? '';
-    const athleteGroups: any[] = teamLeader?.leaders ?? [];
+  const deltas = new Map<string, PlayerDelta>();
+  const ensure = (id: string, name: string, team: string): PlayerDelta => {
+    let d = deltas.get(id);
+    if (!d) {
+      d = { full_name: name, team_name: team, goals: 0, assists: 0, played: false };
+      deltas.set(id, d);
+    }
+    return d;
+  };
 
-    // Each group (goalsLeaders, etc.) contains athletes — dedupe by athlete id
-    const seen = new Set<string>();
-    for (const group of athleteGroups) {
-      for (const entry of group?.leaders ?? []) {
-        const athlete = entry?.athlete;
-        if (!athlete?.id) continue;
-        if (seen.has(athlete.id)) continue;
-        seen.add(athlete.id);
+  for (const e of keyEvents) {
+    const teamName: string = e.team?.displayName ?? '';
+    const typeKey: string = e.type?.type ?? '';
+    const isGoal = typeKey.startsWith('goal') && typeKey !== 'own-goal';
+    const participants: any[] = e.participants ?? [];
 
-        const match = STAT_RE.exec(entry.shortDisplayValue ?? '');
-        if (!match) continue;
+    // Mark every athlete who appears in any key event as having played
+    for (const p of participants) {
+      const a = p?.athlete;
+      if (a?.id) ensure(String(a.id), a.fullName ?? a.displayName ?? '', teamName).played = true;
+    }
 
-        const matches_played = parseInt(match[1], 10);
-        const goals          = parseInt(match[2], 10);
-        const assists        = parseInt(match[3], 10);
-
-        // ESPN returns cumulative tournament totals — overwrite, don't increment
-        await query(
-          `INSERT INTO player_stats
-             (espn_athlete_id, full_name, team_name, goals, assists, matches_played, last_synced_at)
-           VALUES ($1, $2, $3, $4, $5, $6, NOW())
-           ON CONFLICT (espn_athlete_id) DO UPDATE SET
-             full_name      = EXCLUDED.full_name,
-             team_name      = EXCLUDED.team_name,
-             goals          = EXCLUDED.goals,
-             assists        = EXCLUDED.assists,
-             matches_played = EXCLUDED.matches_played,
-             last_synced_at = NOW()`,
-          [athlete.id, athlete.fullName ?? athlete.displayName ?? '', teamName, goals, assists, matches_played]
-        );
-      }
+    if (!isGoal || participants.length === 0) continue;
+    const scorer = participants[0]?.athlete;
+    if (scorer?.id) {
+      ensure(String(scorer.id), scorer.fullName ?? scorer.displayName ?? '', teamName).goals += 1;
+    }
+    const assister = participants[1]?.athlete;
+    if (assister?.id) {
+      ensure(String(assister.id), assister.fullName ?? assister.displayName ?? '', teamName).assists += 1;
     }
   }
 
-  logger.info(`Player stats: synced ESPN event ${espnEventId}`);
+  for (const [id, d] of deltas.entries()) {
+    await query(
+      `INSERT INTO player_stats
+         (espn_athlete_id, full_name, team_name, goals, assists, matches_played, last_synced_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())
+       ON CONFLICT (espn_athlete_id) DO UPDATE SET
+         full_name      = EXCLUDED.full_name,
+         team_name      = EXCLUDED.team_name,
+         goals          = player_stats.goals          + EXCLUDED.goals,
+         assists        = player_stats.assists        + EXCLUDED.assists,
+         matches_played = player_stats.matches_played + EXCLUDED.matches_played,
+         last_synced_at = NOW()`,
+      [id, d.full_name, d.team_name, d.goals, d.assists, d.played ? 1 : 0]
+    );
+  }
+
+  logger.info(`Player stats: synced ESPN event ${espnEventId} (${deltas.size} athletes)`);
 }
 
 // Normalize team names to match ESPN/FIFA aliases.
@@ -102,6 +128,10 @@ export async function backfillAllFinishedMatches(): Promise<void> {
   );
 
   logger.info(`Player stats backfill: ${matches.length} finished matches`);
+
+  // Counters are additive in syncMatchPlayerStats; reset before backfill so
+  // re-running this endpoint doesn't double-count goals/assists.
+  await query('DELETE FROM player_stats');
 
   // Group matches by kickoff date so we fetch each ESPN scoreboard only once
   const byDate = new Map<string, typeof matches>();
