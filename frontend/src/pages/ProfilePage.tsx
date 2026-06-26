@@ -1,10 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { leaderboardApi } from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import { MatchPrediction } from '../types';
 import { avatarColor } from '../utils/flags';
+import { isPushSupported, isIOS, isStandalone, subscribeToPush } from '../utils/push';
+import { api } from '../api/client';
 
 function PredRow({ pred }: { pred: MatchPrediction }) {
   const isFinished = pred.match_status === 'finished';
@@ -38,6 +41,88 @@ function PredRow({ pred }: { pred: MatchPrediction }) {
         <span style={{ fontWeight: 600, fontSize: 13, textAlign: 'right' }}>{pred.away_team}</span>
       </div>
       {pred.is_default && <div className="text-xs text-muted" style={{ marginTop: 4 }}>⚠️ Default prediction</div>}
+    </div>
+  );
+}
+
+function NotificationToggle() {
+  const [state, setState] = useState<'loading' | 'unsupported' | 'ios-needs-a2hs' | 'unsubscribed' | 'subscribed'>('loading');
+  const [busy, setBusy] = useState(false);
+
+  async function refresh() {
+    if (!isPushSupported()) { setState('unsupported'); return; }
+    if (isIOS() && !isStandalone()) { setState('ios-needs-a2hs'); return; }
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = await reg?.pushManager.getSubscription();
+    setState(sub ? 'subscribed' : 'unsubscribed');
+  }
+  useEffect(() => { refresh(); }, []);
+
+  async function enable() {
+    setBusy(true);
+    try {
+      await subscribeToPush();
+    } finally {
+      setBusy(false);
+      refresh();
+    }
+  }
+  async function disable() {
+    setBusy(true);
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      const sub = await reg?.pushManager.getSubscription();
+      if (sub) {
+        await api.post('/push/unsubscribe', { endpoint: sub.endpoint });
+        await sub.unsubscribe();
+      }
+    } finally {
+      setBusy(false);
+      refresh();
+    }
+  }
+
+  if (state === 'loading' || state === 'unsupported') return null;
+
+  const baseRow: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    padding: '12px 14px', gap: 10,
+  };
+
+  if (state === 'ios-needs-a2hs') {
+    return (
+      <div className="card" style={baseRow}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>🔔 Daily reminders</div>
+          <div className="text-xs text-muted" style={{ marginTop: 2 }}>
+            Install to home screen first: Share → Add to Home Screen
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card" style={baseRow}>
+      <div>
+        <div style={{ fontWeight: 700, fontSize: 14 }}>🔔 Daily reminders</div>
+        <div className="text-xs text-muted" style={{ marginTop: 2 }}>
+          {state === 'subscribed' ? 'You\'ll get a daily summary at 12:30' : 'Get nudged daily about pending predictions'}
+        </div>
+      </div>
+      <button
+        onClick={state === 'subscribed' ? disable : enable}
+        disabled={busy}
+        style={{
+          background: state === 'subscribed' ? 'rgba(0,0,0,0.08)' : 'var(--primary)',
+          color: state === 'subscribed' ? 'var(--text)' : 'white',
+          border: 'none', padding: '8px 14px', borderRadius: 8,
+          fontWeight: 700, fontSize: 12, cursor: busy ? 'wait' : 'pointer',
+          opacity: busy ? 0.6 : 1,
+        }}
+      >
+        {state === 'subscribed' ? 'Disable' : 'Enable'}
+      </button>
     </div>
   );
 }
@@ -106,6 +191,10 @@ export function ProfilePage() {
           {matchHistory.map(pred => <PredRow key={pred.id} pred={pred} />)}
         </div>
       )}
+
+      <div style={{ marginTop: 16 }}>
+        <NotificationToggle />
+      </div>
 
       <div style={{ display: 'flex', gap: 12, marginTop: 16, justifyContent: 'center' }}>
         <Link to="/rules" style={{ color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: 600, textDecoration: 'underline' }}>
