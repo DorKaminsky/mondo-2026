@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, subHours } from 'date-fns';
 import { matchesApi, predictionsApi } from '../api';
@@ -8,6 +8,7 @@ import { CalendarReminder } from '../components/CalendarReminder';
 import { Countdown } from '../components/Countdown';
 import { PredictionResult, FirstScorer } from '../types';
 import { flag, teamColor, teamShort, avatarColor, initials } from '../utils/flags';
+import { useDirtyForm } from '../contexts/DirtyFormContext';
 
 function GoalStepper({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
@@ -87,9 +88,10 @@ export function MatchPredictPage() {
   const [firstScorer, setFirstScorer] = useState<FirstScorer>('none');
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
-  // Diff-mismatch confirmation modal: stores the expectedDiff for the message,
-  // null = modal hidden.
-  const [diffWarning, setDiffWarning] = useState<{ expected: number } | null>(null);
+  // Pre-save summary modal — shows all 5 picks for review plus an inline
+  // ⚠️ warning if home/away goals don't match the goal-difference field.
+  // null = hidden.
+  const [confirming, setConfirming] = useState(false);
   // Snapshot of the next match's id, used by the post-save redirect.
   // Updated on every render once we've computed nextMatch below.
   const nextMatchAtSubmit = useRef<number | null>(null);
@@ -147,18 +149,43 @@ export function MatchPredictPage() {
     },
   });
 
-  // Players sometimes set goal_difference inconsistently with the home/away
-  // counts they entered. The diff is intentionally a separate dimension (you
-  // can bet 2-1 result but diff=3, etc.), so we don't auto-correct — but we
-  // do warn so unintentional mismatches don't silently cost points.
+  // Every Save/Update click opens the pre-save summary modal so users can
+  // review all 5 picks before committing. If goal_difference doesn't match
+  // |home-away|, the modal shows an inline ⚠️ — no separate flow.
   function handleSubmitClick() {
-    const expectedDiff = Math.abs(homeGoals - awayGoals);
-    if (expectedDiff !== goalDiff) {
-      setDiffWarning({ expected: expectedDiff });
-      return;
-    }
-    submit.mutate();
+    setConfirming(true);
   }
+
+  // Dirty = current form differs from what's in the DB. Used by the
+  // navigation guard to warn before discarding unsaved edits.
+  const isDirty = !saved && (
+    !existing
+      ? (result !== 'home' || homeGoals !== 0 || awayGoals !== 0 || goalDiff !== 0 || firstScorer !== 'none')
+      : (
+          result !== existing.prediction_result ||
+          homeGoals !== existing.team_a_goals ||
+          awayGoals !== existing.team_b_goals ||
+          goalDiff !== existing.goal_difference ||
+          firstScorer !== existing.first_scorer
+        )
+  );
+
+  // Publish dirty state to the global DirtyFormContext so BottomNav (and
+  // any other consumer) can intercept navigation. Cleared on unmount so
+  // other pages don't inherit a stale dirty flag.
+  const { setDirty, requestNav } = useDirtyForm();
+  useEffect(() => {
+    setDirty(isDirty && !submit.isPending);
+    return () => setDirty(false);
+  }, [isDirty, submit.isPending, setDirty]);
+
+  // Browser tab close / refresh / hard back button.
+  useEffect(() => {
+    if (!isDirty) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty]);
 
   if (matchLoading || !match) {
     return <div className="loading"><div className="spinner" /></div>;
@@ -201,7 +228,7 @@ export function MatchPredictPage() {
     <div className="page">
       <button
         type="button"
-        onClick={() => navigate(-1)}
+        onClick={() => requestNav(() => navigate(-1))}
         style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.85)', fontWeight: 700, fontSize: 15, marginBottom: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
       >
         ← Back
@@ -407,8 +434,9 @@ export function MatchPredictPage() {
 
           {/* Next-match shortcut button — always visible if there's a next match to predict */}
           {nextMatch && (
-            <Link
-              to={`/predict/${nextMatch.id}`}
+            <button
+              type="button"
+              onClick={() => requestNav(() => navigate(`/predict/${nextMatch.id}`))}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -419,8 +447,10 @@ export function MatchPredictPage() {
                 background: 'rgba(255,255,255,0.12)',
                 border: '1px solid rgba(255,255,255,0.25)',
                 borderRadius: 12,
-                textDecoration: 'none',
                 color: 'white',
+                cursor: 'pointer',
+                width: '100%',
+                textAlign: 'left',
               }}
             >
               <div style={{ minWidth: 0 }}>
@@ -439,7 +469,7 @@ export function MatchPredictPage() {
                 </div>
               </div>
               <span style={{ fontSize: 22, fontWeight: 900, flexShrink: 0 }}>→</span>
-            </Link>
+            </button>
           )}
         </>
       )}
@@ -602,85 +632,146 @@ export function MatchPredictPage() {
         );
       })()}
 
-      {/* Goal-diff mismatch confirmation modal — replaces the browser's confirm()
-          so the dialog matches the app's look (no "vercel.app says" header). */}
-      {diffWarning && (
-        <div
-          onClick={() => setDiffWarning(null)}
-          style={{
-            position: 'fixed', inset: 0,
-            background: 'rgba(0,0,0,0.6)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: 20, zIndex: 1000,
-            backdropFilter: 'blur(2px)',
-          }}
-        >
+      {/* Pre-save summary modal — shows all 5 picks for review.
+          If |home-away| ≠ goalDiff, an inline ⚠️ banner appears at the top
+          (no separate flow — single popup covers review + diff warning). */}
+      {confirming && (() => {
+        const expectedDiff = Math.abs(homeGoals - awayGoals);
+        const diffMismatch = expectedDiff !== goalDiff;
+        const resultLabel = result === 'home' ? match.home_team : result === 'away' ? match.away_team : 'Draw';
+        const firstScorerLabel = firstScorer === 'home' ? match.home_team : firstScorer === 'away' ? match.away_team : 'No Goals';
+        const firstScorerEmoji = firstScorer === 'home' ? flag(match.home_team) : firstScorer === 'away' ? flag(match.away_team) : '🚫';
+        const rowStyle: React.CSSProperties = {
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '10px 14px', borderBottom: '1px solid var(--border)',
+        };
+        const labelStyle: React.CSSProperties = { fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 };
+        const valueStyle: React.CSSProperties = { fontSize: 14, fontWeight: 800, color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: 6 };
+
+        return (
           <div
-            onClick={e => e.stopPropagation()}
+            onClick={() => !submit.isPending && setConfirming(false)}
             style={{
-              background: 'white',
-              borderRadius: 16,
-              maxWidth: 360, width: '100%',
-              boxShadow: '0 20px 50px rgba(0,0,0,0.4)',
-              overflow: 'hidden',
+              position: 'fixed', inset: 0,
+              background: 'rgba(0,0,0,0.6)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 20, zIndex: 1000,
+              backdropFilter: 'blur(2px)',
             }}
           >
-            {/* Amber header bar */}
-            <div style={{
-              background: 'linear-gradient(135deg, #f9ca24 0%, #e8a020 100%)',
-              padding: '18px 20px',
-              display: 'flex', alignItems: 'center', gap: 10,
-            }}>
-              <span style={{ fontSize: 28 }}>⚠️</span>
-              <div style={{ fontWeight: 800, fontSize: 17, color: 'white' }}>
-                Goal difference mismatch
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: 'white',
+                borderRadius: 16,
+                maxWidth: 400, width: '100%',
+                maxHeight: '90vh', overflowY: 'auto',
+                boxShadow: '0 20px 50px rgba(0,0,0,0.4)',
+                overflow: 'hidden',
+              }}
+            >
+              {/* Header */}
+              <div style={{
+                background: 'linear-gradient(135deg, var(--primary) 0%, #2d8a4e 100%)',
+                padding: '16px 20px',
+                color: 'white',
+              }}>
+                <div style={{ fontWeight: 800, fontSize: 16 }}>Review your prediction</div>
+                <div style={{ fontSize: 12, opacity: 0.85, marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>{flag(match.home_team)}</span>
+                  <span>{match.home_team}</span>
+                  <span style={{ opacity: 0.6 }}>vs</span>
+                  <span>{match.away_team}</span>
+                  <span>{flag(match.away_team)}</span>
+                </div>
               </div>
-            </div>
 
-            <div style={{ padding: 20 }}>
-              <p style={{ fontSize: 14, lineHeight: 1.5, marginBottom: 14, color: 'var(--text)' }}>
-                You entered <b>{homeGoals}–{awayGoals}</b>, a difference of{' '}
-                <b style={{ color: 'var(--primary)' }}>{diffWarning.expected}</b>.
-                <br />
-                But Goal Difference is set to <b style={{ color: '#e8a020' }}>{goalDiff}</b>.
-              </p>
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 18, lineHeight: 1.4 }}>
-                If you save anyway, you'll lose the goal-difference point if your guess is wrong.
-                The diff is a separate prediction — saving on purpose is fine.
-              </p>
+              {/* Inline diff-mismatch warning */}
+              {diffMismatch && (
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(249,202,36,0.18), rgba(232,160,32,0.12))',
+                  borderBottom: '1px solid rgba(232,160,32,0.3)',
+                  padding: '12px 16px',
+                  display: 'flex', gap: 10, alignItems: 'flex-start',
+                }}>
+                  <span style={{ fontSize: 20 }}>⚠️</span>
+                  <div style={{ fontSize: 12, lineHeight: 1.4, color: 'var(--text)' }}>
+                    <b>Goal difference mismatch:</b> {homeGoals}–{awayGoals} has a difference of <b>{expectedDiff}</b>, but you set Goal Difference to <b>{goalDiff}</b>. The diff is a separate bet — saving on purpose is fine.
+                  </div>
+                </div>
+              )}
 
-              <div style={{ display: 'flex', gap: 10 }}>
+              {/* Summary rows */}
+              <div>
+                <div style={rowStyle}>
+                  <span style={labelStyle}>1. Match Result</span>
+                  <span style={valueStyle}>
+                    {result !== 'draw' && <span>{flag(result === 'home' ? match.home_team : match.away_team)}</span>}
+                    <span>{resultLabel}</span>
+                  </span>
+                </div>
+                <div style={rowStyle}>
+                  <span style={labelStyle}>2. {match.home_team} Goals</span>
+                  <span style={valueStyle}>{homeGoals}</span>
+                </div>
+                <div style={rowStyle}>
+                  <span style={labelStyle}>3. {match.away_team} Goals</span>
+                  <span style={valueStyle}>{awayGoals}</span>
+                </div>
+                <div style={rowStyle}>
+                  <span style={labelStyle}>4. Goal Difference</span>
+                  <span style={{ ...valueStyle, color: diffMismatch ? '#e8a020' : 'var(--primary)' }}>{goalDiff}</span>
+                </div>
+                <div style={{ ...rowStyle, borderBottom: 'none' }}>
+                  <span style={labelStyle}>5. First Scoring Team</span>
+                  <span style={valueStyle}>
+                    <span>{firstScorerEmoji}</span>
+                    <span>{firstScorerLabel}</span>
+                  </span>
+                </div>
+              </div>
+
+              {/* Buttons */}
+              <div style={{ display: 'flex', gap: 10, padding: 16, borderTop: '1px solid var(--border)' }}>
                 <button
-                  onClick={() => setDiffWarning(null)}
+                  onClick={() => setConfirming(false)}
+                  disabled={submit.isPending}
                   style={{
                     flex: 1, padding: '12px', borderRadius: 10,
                     border: '2px solid var(--border)',
                     background: 'white',
                     color: 'var(--text)',
                     fontWeight: 700, fontSize: 14,
-                    cursor: 'pointer',
+                    cursor: submit.isPending ? 'wait' : 'pointer',
+                    opacity: submit.isPending ? 0.6 : 1,
                   }}
                 >
-                  ← Fix it
+                  ← Edit
                 </button>
                 <button
-                  onClick={() => { setDiffWarning(null); submit.mutate(); }}
+                  onClick={() => { setConfirming(false); submit.mutate(); }}
+                  disabled={submit.isPending}
                   style={{
-                    flex: 1, padding: '12px', borderRadius: 10,
+                    flex: 1.3, padding: '12px', borderRadius: 10,
                     border: 'none',
-                    background: '#e8a020',
+                    background: diffMismatch ? '#e8a020' : 'var(--primary)',
                     color: 'white',
-                    fontWeight: 700, fontSize: 14,
-                    cursor: 'pointer',
+                    fontWeight: 800, fontSize: 14,
+                    cursor: submit.isPending ? 'wait' : 'pointer',
+                    opacity: submit.isPending ? 0.6 : 1,
                   }}
                 >
-                  Save anyway
+                  {submit.isPending ? 'Saving…' : diffMismatch ? 'Save anyway' : '✓ Confirm save'}
                 </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
+
+      {/* Unsaved-changes modal lives at the App level (UnsavedChangesModal),
+          driven by DirtyFormContext. BottomNav, Back button, and Next-match
+          button all route through requestNav() so they trigger the same UI. */}
     </div>
   );
 }

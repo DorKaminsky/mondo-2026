@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ProtectedRoute, AdminRoute, GuestRoute, SuperAdminRoute } from './components/ProtectedRoute';
 import { BottomNav } from './components/BottomNav';
+import { UnsavedChangesModal } from './components/UnsavedChangesModal';
 import { useAuth } from './contexts/AuthContext';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
@@ -45,6 +46,7 @@ function AppRoutes() {
         <Route path="/rules" element={<RulesPage />} />
       </Routes>
       {user && <BottomNav />}
+      <UnsavedChangesModal />
     </div>
   );
 }

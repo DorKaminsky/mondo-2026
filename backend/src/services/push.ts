@@ -83,24 +83,44 @@ export async function sendDailySummaryToUser(userId: number, userName: string): 
     return;
   }
 
+  // Pull this user's saved (non-default) predictions for the window. Used to
+  // (a) count pending matches and (b) echo back scorelines so mismatches
+  // between what users *think* they saved and what's in the DB surface fast.
   const matchIds = todaysMatches.map(m => m.id);
-  const { rows: predicted } = await query<{ match_id: number }>(
-    `SELECT match_id FROM match_predictions
+  const { rows: predicted } = await query<{
+    match_id: number; team_a_goals: number; team_b_goals: number;
+  }>(
+    `SELECT match_id, team_a_goals, team_b_goals
+       FROM match_predictions
       WHERE user_id = $1 AND match_id = ANY($2::int[]) AND is_default = false`,
     [userId, matchIds]
   );
-  const predictedIds = new Set(predicted.map(r => r.match_id));
-  const pending = todaysMatches.filter(m => !predictedIds.has(m.id));
+  const predMap = new Map(predicted.map(r => [r.match_id, `${r.team_a_goals}-${r.team_b_goals}`]));
+  const pendingCount = todaysMatches.length - predMap.size;
 
+  // Echo the scoreline for each match. Notification body has no hard cap on
+  // Android/desktop, and iOS truncates somewhere around 4 lines on the lock
+  // screen but expands fully on long-press — fine for typical WC2026 days
+  // (≤4 matches in any 24h window during group stage).
+  const shortName = (s: string) => s.length > 10 ? s.slice(0, 9) + '.' : s;
+  const matchLines = todaysMatches.map(m => {
+    const pred = predMap.get(m.id);
+    const teams = `${shortName(m.home_team)}-${shortName(m.away_team)}`;
+    return pred ? `${teams}: ${pred} ✅` : `${teams}: ⏰`;
+  });
+
+  // Headline summarises pending vs total; body lists the actual picks so
+  // users can spot mistakes (e.g. saw "0-0" they didn't intend).
   const word = (n: number) => n === 1 ? 'match' : 'matches';
-  let body: string;
-  if (pending.length === 0) {
-    body = `Hi ${userName}! All ${todaysMatches.length} ${word(todaysMatches.length)} in the next 24h predicted ✅ Good luck!`;
-  } else if (pending.length === todaysMatches.length) {
-    body = `Hi ${userName}! ${pending.length} ${word(pending.length)} in the next 24h — none predicted yet ⏰`;
+  let headline: string;
+  if (pendingCount === 0) {
+    headline = `Hi ${userName}! All ${todaysMatches.length} ${word(todaysMatches.length)} predicted ✅ Review:`;
+  } else if (pendingCount === todaysMatches.length) {
+    headline = `Hi ${userName}! ${pendingCount} ${word(pendingCount)} in the next 24h — none predicted yet ⏰`;
   } else {
-    body = `Hi ${userName}! ${pending.length} of ${todaysMatches.length} ${word(todaysMatches.length)} in the next 24h still need predictions ⏰`;
+    headline = `Hi ${userName}! ${pendingCount} of ${todaysMatches.length} still pending. Your picks:`;
   }
+  const body = `${headline}\n${matchLines.join('\n')}`;
 
   await sendToUser(userId, {
     title: '⚽ Mondo 2026',

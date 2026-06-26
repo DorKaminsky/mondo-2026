@@ -1,5 +1,6 @@
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useDirtyForm } from '../contexts/DirtyFormContext';
 
 const HomeIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -50,7 +51,9 @@ const SettingsIcon = () => (
 
 export function BottomNav() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuth();
+  const { requestNav } = useDirtyForm();
 
   const isActive = (path: string) => path === '/'
     ? location.pathname === '/'
@@ -70,7 +73,15 @@ export function BottomNav() {
       {items.map(({ path, label, Icon }) => {
         const active = isActive(path);
         return (
-          <a key={path} href={path} className={active ? 'nav-item active' : 'nav-item'}>
+          <a
+            key={path}
+            href={path}
+            onClick={(e) => {
+              e.preventDefault();
+              requestNav(() => navigate(path));
+            }}
+            className={active ? 'nav-item active' : 'nav-item'}
+          >
             <div style={{
               position: 'relative', display: 'flex', flexDirection: 'column',
               alignItems: 'center', gap: 3,
