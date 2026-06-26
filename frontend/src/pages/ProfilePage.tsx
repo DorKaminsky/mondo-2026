@@ -107,7 +107,7 @@ function NotificationToggle() {
       <div>
         <div style={{ fontWeight: 700, fontSize: 14 }}>🔔 Daily reminders</div>
         <div className="text-xs text-muted" style={{ marginTop: 2 }}>
-          {state === 'subscribed' ? 'You\'ll get a daily summary at 12:30' : 'Get nudged daily about pending predictions'}
+          {state === 'subscribed' ? 'You\'ll get a daily summary at 16:00' : 'Get nudged daily about pending predictions'}
         </div>
       </div>
       <button

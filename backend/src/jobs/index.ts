@@ -73,9 +73,9 @@ export function startJobs() {
     }
   });
 
-  // Daily push notification: 12:30 Israel time = 09:30 UTC (Israel is UTC+3, no DST).
+  // Daily push notification: 16:00 Israel time = 13:00 UTC (Israel is UTC+3, no DST).
   // Sends every subscribed user a personalised summary of today's matches.
-  cron.schedule('30 9 * * *', async () => {
+  cron.schedule('0 13 * * *', async () => {
     try {
       await sendDailySummaryToAll();
     } catch (err) {
