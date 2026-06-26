@@ -22,16 +22,6 @@ export function getPublicKey(): string {
   return VAPID_PUBLIC;
 }
 
-// Next 12:30 Israel time after NOW, as UTC ms. Israel = UTC+3 fixed (no DST).
-// ponytail: hardcoded UTC+3, swap for proper TZ math only if Israel adopts DST again
-function nextIsraelPushUtcMs(): number {
-  const now = Date.now();
-  // 12:30 Israel = 09:30 UTC. Today's 09:30 UTC:
-  const today = new Date(now);
-  const todayUtc930 = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 9, 30, 0);
-  return todayUtc930 > now ? todayUtc930 : todayUtc930 + 24 * 60 * 60 * 1000;
-}
-
 interface SubRow {
   id: number;
   endpoint: string;
@@ -72,25 +62,22 @@ export async function sendToUser(userId: number, payload: PushPayload): Promise<
 // Build the personalised daily-summary push for one user and send it.
 // Always sends — even when caught up — per user request.
 export async function sendDailySummaryToUser(userId: number, userName: string): Promise<void> {
-  // Window: from NOW() until the next 12:30 Israel-time push. Guarantees every
-  // kickoff is covered by exactly one daily nudge (a match at Israel-08:00 is
-  // included in the previous day's 12:30 push, not skipped because it already
-  // started by the next 12:30). Israel is UTC+3, no DST.
-  const next1230IsraelUtcMs = nextIsraelPushUtcMs();
+  // Window: next 24h of scheduled matches. Always 24h regardless of when the
+  // push fires — keeps test pushes meaningful and guarantees every kickoff is
+  // covered by at most one daily nudge (since the cron also runs every 24h).
   const { rows: todaysMatches } = await query<{ id: number; home_team: string; away_team: string }>(
     `SELECT id, home_team, away_team
        FROM matches
       WHERE status = 'scheduled'
         AND kickoff_time_utc >= NOW()
-        AND kickoff_time_utc < $1
-      ORDER BY kickoff_time_utc`,
-    [new Date(next1230IsraelUtcMs)]
+        AND kickoff_time_utc < NOW() + INTERVAL '24 hours'
+      ORDER BY kickoff_time_utc`
   );
 
   if (todaysMatches.length === 0) {
     await sendToUser(userId, {
       title: '⚽ Mondo 2026',
-      body: `Hi ${userName}! No upcoming matches before tomorrow — enjoy the break! 🍻`,
+      body: `Hi ${userName}! No matches in the next 24h — enjoy the break! 🍻`,
       url: '/',
     });
     return;
@@ -108,11 +95,11 @@ export async function sendDailySummaryToUser(userId: number, userName: string): 
   const word = (n: number) => n === 1 ? 'match' : 'matches';
   let body: string;
   if (pending.length === 0) {
-    body = `Hi ${userName}! All ${todaysMatches.length} upcoming ${word(todaysMatches.length)} predicted ✅ Good luck!`;
+    body = `Hi ${userName}! All ${todaysMatches.length} ${word(todaysMatches.length)} in the next 24h predicted ✅ Good luck!`;
   } else if (pending.length === todaysMatches.length) {
-    body = `Hi ${userName}! ${pending.length} ${word(pending.length)} coming up — none predicted yet ⏰`;
+    body = `Hi ${userName}! ${pending.length} ${word(pending.length)} in the next 24h — none predicted yet ⏰`;
   } else {
-    body = `Hi ${userName}! ${pending.length} of ${todaysMatches.length} upcoming ${word(todaysMatches.length)} still need predictions ⏰`;
+    body = `Hi ${userName}! ${pending.length} of ${todaysMatches.length} ${word(todaysMatches.length)} in the next 24h still need predictions ⏰`;
   }
 
   await sendToUser(userId, {
