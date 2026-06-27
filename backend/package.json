@@ -6,6 +6,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "migrate": "tsx src/db/migrate.ts",
+    "sync-knockouts": "tsx scripts/sync-knockouts.ts",
     "test": "jest"
   },
   "dependencies": {
