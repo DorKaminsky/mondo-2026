@@ -87,6 +87,7 @@ export const leaderboardApi = {
       player: { id: number; name: string; role: string };
       score: Score | null;
       preTournament: PreTournamentPrediction | null;
+      preTournamentActuals: Record<string, string>;
       matchHistory: MatchPrediction[];
     }>(`/leaderboard/player/${id}`).then(r => r.data),
   summary: () =>

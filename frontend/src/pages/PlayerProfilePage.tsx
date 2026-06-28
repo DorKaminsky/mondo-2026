@@ -7,7 +7,10 @@ import { MatchPrediction, PreTournamentPrediction } from '../types';
 
 const GROUPS = ['a','b','c','d','e','f','g','h','i','j','k','l'] as const;
 
-function PreTournamentBlock({ pt }: { pt: PreTournamentPrediction | null }) {
+function PreTournamentBlock({ pt, actuals }: {
+  pt: PreTournamentPrediction | null;
+  actuals: Record<string, string>;
+}) {
   if (!pt) {
     return (
       <div className="card" style={{ textAlign: 'center', padding: 16 }}>
@@ -15,32 +18,116 @@ function PreTournamentBlock({ pt }: { pt: PreTournamentPrediction | null }) {
       </div>
     );
   }
-  const grand: [string, string | null][] = [
-    ['🏆 Winner', pt.winner_team],
-    ['🥈 Runner-up', pt.runner_up_team],
-    ['⚽ Top Scorer', pt.top_scorer_name],
-    ['🅰️ Top Assister', pt.top_assister_name],
+
+  // Case-insensitive trim-tolerant compare. Returns:
+  //   'correct' = picked & actual match
+  //   'wrong'   = picked & actual differ
+  //   'pending' = no actual yet (winner/runner-up/scorers before tournament end)
+  //   'empty'   = user didn't pick
+  type Status = 'correct' | 'wrong' | 'pending' | 'empty';
+  function statusOf(pick: string | null | undefined, actual: string | undefined): Status {
+    if (!pick) return 'empty';
+    if (!actual) return 'pending';
+    return pick.trim().toLowerCase() === actual.trim().toLowerCase() ? 'correct' : 'wrong';
+  }
+  const icon = (s: Status) =>
+    s === 'correct' ? '✅' : s === 'wrong' ? '❌' : s === 'pending' ? '⏳' : '—';
+
+  // Build the grand-prize rows + tally points the user earned
+  const grand: Array<{ label: string; pick: string | null; actual: string; pts: number }> = [
+    { label: '🏆 Winner',      pick: pt.winner_team,       actual: actuals.winner ?? '',        pts: 16 },
+    { label: '🥈 Runner-up',   pick: pt.runner_up_team,    actual: actuals.runner_up ?? '',     pts: 8  },
+    { label: '⚽ Top Scorer',  pick: pt.top_scorer_name,   actual: actuals.top_scorer ?? '',    pts: 12 },
+    { label: '🅰️ Top Assister', pick: pt.top_assister_name, actual: actuals.top_assister ?? '', pts: 12 },
   ];
+
+  let earnedGrand = 0;
+  let earnedGroups = 0;
+  let maxResolved = 0;
+  for (const g of grand) {
+    const s = statusOf(g.pick, g.actual);
+    if (s === 'correct') earnedGrand += g.pts;
+    if (s !== 'pending') maxResolved += g.pts;
+  }
+  for (const g of GROUPS) {
+    const p1 = (pt as unknown as Record<string, string>)[`group_${g}_first`];
+    const p2 = (pt as unknown as Record<string, string>)[`group_${g}_second`];
+    const a1 = actuals[`group_${g}_first`];
+    const a2 = actuals[`group_${g}_second`];
+    if (statusOf(p1, a1) === 'correct') earnedGroups += 4;
+    if (statusOf(p2, a2) === 'correct') earnedGroups += 4;
+    if (a1) maxResolved += 4;
+    if (a2) maxResolved += 4;
+  }
+  const earnedTotal = earnedGrand + earnedGroups;
+
   return (
     <div className="card">
-      <h3 style={{ marginBottom: 12 }}>Pre-Tournament</h3>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
-        {grand.map(([label, val]) => (
-          <div key={label} style={{ background: 'var(--surface-2, rgba(0,0,0,0.04))', padding: 10, borderRadius: 8 }}>
-            <div className="text-xs text-muted" style={{ marginBottom: 4 }}>{label}</div>
-            <div style={{ fontWeight: 700, fontSize: 13 }}>{val || '—'}</div>
-          </div>
-        ))}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <h3 style={{ margin: 0 }}>Pre-Tournament</h3>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+          <b style={{ color: 'var(--primary)', fontSize: 16 }}>{earnedTotal}</b>
+          {' / '}
+          <span>{maxResolved}</span>
+          <span style={{ fontSize: 11, marginLeft: 4 }}>pts</span>
+        </div>
       </div>
+
+      {/* Grand prizes */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
+        {grand.map(g => {
+          const s = statusOf(g.pick, g.actual);
+          const bg = s === 'correct' ? 'rgba(31,106,58,0.12)'
+                   : s === 'wrong' ? 'rgba(229,62,62,0.08)'
+                   : 'var(--surface-2, rgba(0,0,0,0.04))';
+          return (
+            <div key={g.label} style={{ background: bg, padding: 10, borderRadius: 8 }}>
+              <div className="text-xs text-muted" style={{ marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
+                <span>{g.label}</span>
+                <span>{icon(s)}</span>
+              </div>
+              <div style={{ fontWeight: 700, fontSize: 13 }}>{g.pick || '—'}</div>
+              {s === 'wrong' && g.actual && (
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                  Actual: <b>{g.actual}</b>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Group 1st/2nd */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
         {GROUPS.map(g => {
           const first = (pt as unknown as Record<string, string>)[`group_${g}_first`];
           const second = (pt as unknown as Record<string, string>)[`group_${g}_second`];
+          const a1 = actuals[`group_${g}_first`];
+          const a2 = actuals[`group_${g}_second`];
+          const s1 = statusOf(first, a1);
+          const s2 = statusOf(second, a2);
+          // Light group-level tint when fully resolved
+          const allCorrect = s1 === 'correct' && s2 === 'correct';
+          const bg = allCorrect
+            ? 'rgba(31,106,58,0.10)'
+            : 'var(--surface-2, rgba(0,0,0,0.04))';
           return (
-            <div key={g} style={{ background: 'var(--surface-2, rgba(0,0,0,0.04))', padding: 8, borderRadius: 8 }}>
+            <div key={g} style={{ background: bg, padding: 8, borderRadius: 8 }}>
               <div className="text-xs" style={{ fontWeight: 700, marginBottom: 4 }}>Group {g.toUpperCase()}</div>
-              <div style={{ fontSize: 12 }}>1️⃣ {first || '—'}</div>
-              <div style={{ fontSize: 12 }}>2️⃣ {second || '—'}</div>
+              <div style={{ fontSize: 12, display: 'flex', justifyContent: 'space-between', gap: 4 }}>
+                <span>1️⃣ {first || '—'}</span>
+                <span>{icon(s1)}</span>
+              </div>
+              {s1 === 'wrong' && a1 && (
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 18 }}>→ {a1}</div>
+              )}
+              <div style={{ fontSize: 12, display: 'flex', justifyContent: 'space-between', gap: 4 }}>
+                <span>2️⃣ {second || '—'}</span>
+                <span>{icon(s2)}</span>
+              </div>
+              {s2 === 'wrong' && a2 && (
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 18 }}>→ {a2}</div>
+              )}
             </div>
           );
         })}
@@ -106,7 +193,7 @@ export function PlayerProfilePage() {
     );
   }
 
-  const { player, score, preTournament, matchHistory } = data;
+  const { player, score, preTournament, preTournamentActuals, matchHistory } = data;
 
   const finished = matchHistory.filter(p => p.points_earned !== null);
   const total = finished.length;
@@ -213,7 +300,7 @@ export function PlayerProfilePage() {
         </div>
       )}
 
-      <PreTournamentBlock pt={preTournament} />
+      <PreTournamentBlock pt={preTournament} actuals={preTournamentActuals ?? {}} />
 
       <h3 style={{ color: 'white', fontSize: 16, margin: '20px 0 10px' }}>
         Match History {matchHistory.length > 0 && <span className="text-muted text-sm" style={{ fontWeight: 400 }}>· {matchHistory.length} finished</span>}

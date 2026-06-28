@@ -141,6 +141,14 @@ leaderboardRouter.get('/player/:id', authenticate, async (req: Request, res: Res
     [targetId]
   );
 
+  // Pull saved actuals so frontend can render ✓/✗ next to each pick.
+  // Empty strings = not yet determined (winner/scorer/etc before tournament end).
+  const { rows: actualRows } = await query<{ key: string; value: string }>(
+    `SELECT key, value FROM system_settings WHERE key LIKE 'pt_actual_%'`
+  );
+  const actuals: Record<string, string> = {};
+  for (const r of actualRows) actuals[r.key.replace('pt_actual_', '')] = r.value;
+
   const { rows: matchHistory } = await query(
     `SELECT mp.id, mp.match_id, mp.prediction_result, mp.team_a_goals, mp.team_b_goals,
             mp.first_scorer, mp.goal_difference, mp.is_default, mp.points_earned,
@@ -157,6 +165,7 @@ leaderboardRouter.get('/player/:id', authenticate, async (req: Request, res: Res
     player: { id: player.id, name: player.name, role: player.role },
     score: scoreRows[0] ?? null,
     preTournament: preTournament[0] ?? null,
+    preTournamentActuals: actuals,
     matchHistory,
   });
 });

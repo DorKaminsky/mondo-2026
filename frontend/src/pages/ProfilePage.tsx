@@ -197,6 +197,11 @@ export function ProfilePage() {
       </div>
 
       <div style={{ display: 'flex', gap: 12, marginTop: 16, justifyContent: 'center' }}>
+        {user?.id && (
+          <Link to={`/player/${user.id}`} style={{ color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: 600, textDecoration: 'underline' }}>
+            🏆 My Pre-Tournament
+          </Link>
+        )}
         <Link to="/rules" style={{ color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: 600, textDecoration: 'underline' }}>
           📖 Rules & FAQ
         </Link>
