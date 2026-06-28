@@ -41,6 +41,37 @@ function normTeam(name: string): string {
   return TEAM_ALIASES[lower] ?? lower;
 }
 
+// 90 minutes in seconds, per ESPN's play-by-play clock. Goals with
+// clock.value > 5400 are extra-time / shootout events that should not
+// count toward the regulation score we use for grading predictions.
+const REGULATION_END_SECONDS = 5400;
+
+// Reconstruct the 90-minute score from the play-by-play. Only used when the
+// match went to ET or pens — for normal full-time finishes the top-level
+// `score` field already IS the regulation score, no reconstruction needed.
+// Returns null when we can't reliably reconstruct (e.g. play-by-play missing
+// or incomplete); caller should fall back to the top-level score in that case.
+function reconstructRegulationScore(
+  details: any[],
+  homeTeamId: string,
+  awayTeamId: string,
+): { home: number; away: number } | null {
+  if (!Array.isArray(details) || details.length === 0) return null;
+  let home = 0;
+  let away = 0;
+  for (const ev of details) {
+    if (!ev?.scoringPlay) continue;
+    if (ev.shootout) continue; // pens never count
+    const clk = ev?.clock?.value;
+    if (typeof clk !== 'number') continue;
+    if (clk > REGULATION_END_SECONDS) continue; // ET goals don't count
+    const teamId = String(ev?.team?.id ?? '');
+    if (teamId === String(homeTeamId)) home++;
+    else if (teamId === String(awayTeamId)) away++;
+  }
+  return { home, away };
+}
+
 export async function syncLiveScores(): Promise<void> {
   const today = new Date();
   const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
@@ -72,21 +103,66 @@ export async function syncLiveScores(): Promise<void> {
     const awayComp = competition.competitors?.find((c: any) => c.homeAway === 'away');
     if (!homeComp || !awayComp) continue;
 
-    const homeScore = homeComp.score != null ? parseInt(homeComp.score, 10) : 0;
-    const awayScore = awayComp.score != null ? parseInt(awayComp.score, 10) : 0;
-
-    let firstScorerTeam: 'home' | 'away' | 'none' = 'none';
+    // ESPN's top-level `score` is the regulation score for normal finishes,
+    // but the END-OF-EXTRA-TIME score for matches that go to ET/pens.
+    // Predictions are graded against the 90-min score, so we reconstruct it
+    // from the play-by-play for STATUS_FINAL_AET / STATUS_FINAL_PEN.
+    const espnHomeScore = homeComp.score != null ? parseInt(homeComp.score, 10) : 0;
+    const espnAwayScore = awayComp.score != null ? parseInt(awayComp.score, 10) : 0;
     const details: any[] = competition.details ?? [];
-    const firstGoal = details.find((d: any) => d.type?.text === 'Goal' && d.scoringPlay === true);
-    if (firstGoal) {
-      firstScorerTeam = firstGoal.team?.id === homeComp.team?.id ? 'home' : 'away';
+
+    const wentToET = statusName === 'STATUS_FINAL_AET' || statusName === 'STATUS_FINAL_PEN';
+    let homeScore = espnHomeScore;
+    let awayScore = espnAwayScore;
+    let homeScoreFullTime: number | null = null;
+    let awayScoreFullTime: number | null = null;
+    let homeShootoutScore: number | null = null;
+    let awayShootoutScore: number | null = null;
+
+    if (wentToET) {
+      // espnHomeScore/espnAwayScore here are the post-ET score.
+      homeScoreFullTime = espnHomeScore;
+      awayScoreFullTime = espnAwayScore;
+      const reg = reconstructRegulationScore(
+        details, homeComp.team?.id ?? '', awayComp.team?.id ?? ''
+      );
+      if (reg) {
+        homeScore = reg.home;
+        awayScore = reg.away;
+      } else {
+        logger.warn(
+          `Live sync: ${statusName} but could not reconstruct 90-min score from play-by-play for ESPN ${espnId}; falling back to post-ET score`
+        );
+      }
+      if (statusName === 'STATUS_FINAL_PEN') {
+        const hShoot = homeComp.shootoutScore;
+        const aShoot = awayComp.shootoutScore;
+        if (typeof hShoot === 'number') homeShootoutScore = hShoot;
+        if (typeof aShoot === 'number') awayShootoutScore = aShoot;
+      }
+    }
+
+    // First-scorer: only count goals scored in regulation (≤ 90'). If 0-0
+    // at the whistle and someone scored only in ET, first_scorer stays
+    // 'none' per the rule that predictions are for the 90-min outcome.
+    let firstScorerTeam: 'home' | 'away' | 'none' = 'none';
+    const firstRegulationGoal = details.find((d: any) =>
+      d?.scoringPlay === true &&
+      !d?.shootout &&
+      typeof d?.clock?.value === 'number' &&
+      d.clock.value <= REGULATION_END_SECONDS
+    );
+    if (firstRegulationGoal) {
+      firstScorerTeam = firstRegulationGoal.team?.id === homeComp.team?.id ? 'home' : 'away';
     }
 
     let { rows } = await query<{
       id: number; status: string; home_score: number | null;
       away_score: number | null; first_scorer_team: string | null;
+      home_score_full_time: number | null; away_score_full_time: number | null;
+      home_shootout_score: number | null; away_shootout_score: number | null;
     }>(
-      'SELECT id, status, home_score, away_score, first_scorer_team FROM matches WHERE api_match_id = $1',
+      'SELECT id, status, home_score, away_score, first_scorer_team, home_score_full_time, away_score_full_time, home_shootout_score, away_shootout_score FROM matches WHERE api_match_id = $1',
       [espnId]
     );
 
@@ -103,9 +179,14 @@ export async function syncLiveScores(): Promise<void> {
         const dateMatches = await query<{
           id: number; status: string; home_score: number | null;
           away_score: number | null; first_scorer_team: string | null;
+          home_score_full_time: number | null; away_score_full_time: number | null;
+          home_shootout_score: number | null; away_shootout_score: number | null;
           home_team: string; away_team: string;
         }>(
-          `SELECT id, status, home_score, away_score, first_scorer_team, home_team, away_team
+          `SELECT id, status, home_score, away_score, first_scorer_team,
+                  home_score_full_time, away_score_full_time,
+                  home_shootout_score, away_shootout_score,
+                  home_team, away_team
            FROM matches
            WHERE DATE(kickoff_time_utc) BETWEEN ($1::date - interval '1 day') AND ($1::date + interval '1 day')`,
           [eventDate]
@@ -158,16 +239,29 @@ export async function syncLiveScores(): Promise<void> {
       match.status === newStatus &&
       match.home_score === homeScore &&
       match.away_score === awayScore &&
+      match.home_score_full_time === homeScoreFullTime &&
+      match.away_score_full_time === awayScoreFullTime &&
+      match.home_shootout_score === homeShootoutScore &&
+      match.away_shootout_score === awayShootoutScore &&
       (match.first_scorer_team ?? 'none') === effectiveFirstScorer;
     if (unchanged) continue;
 
     await query(
-      `UPDATE matches SET home_score=$1, away_score=$2, first_scorer_team=$3,
-       status=$4, last_updated=NOW() WHERE id=$5`,
-      [homeScore, awayScore, effectiveFirstScorer, newStatus, match.id]
+      `UPDATE matches SET
+         home_score=$1, away_score=$2, first_scorer_team=$3, status=$4,
+         home_score_full_time=$5, away_score_full_time=$6,
+         home_shootout_score=$7, away_shootout_score=$8,
+         last_updated=NOW()
+       WHERE id=$9`,
+      [homeScore, awayScore, effectiveFirstScorer, newStatus,
+       homeScoreFullTime, awayScoreFullTime,
+       homeShootoutScore, awayShootoutScore, match.id]
     );
 
-    logger.info(`Live sync: match ${match.id} → ${newStatus} (${homeScore}–${awayScore}, first=${effectiveFirstScorer})`);
+    const etSuffix = wentToET
+      ? ` (FT: ${homeScoreFullTime}–${awayScoreFullTime}${homeShootoutScore !== null ? `, pens ${homeShootoutScore}–${awayShootoutScore}` : ''})`
+      : '';
+    logger.info(`Live sync: match ${match.id} → ${newStatus} (${homeScore}–${awayScore}, first=${effectiveFirstScorer})${etSuffix}`);
 
     if (newStatus === 'finished') {
       await calculateMatchScores(match.id);

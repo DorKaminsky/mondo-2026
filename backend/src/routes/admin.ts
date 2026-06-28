@@ -10,11 +10,18 @@ adminRouter.use(authenticate, requireAdmin);
 
 // ── Match Result Entry ──────────────────────────────────────────────────────
 
+// `home_score` / `away_score` are the 90-minute (regulation) score — what
+// users predicted against. The full-time + shootout fields are optional, for
+// knockout matches that went to ET/pens — admin only fills them in for display.
 const resultSchema = Joi.object({
   home_score: Joi.number().integer().min(0).required(),
   away_score: Joi.number().integer().min(0).required(),
   first_scorer_team: Joi.string().valid('home', 'away', 'none').required(),
   status: Joi.string().valid('scheduled', 'live', 'finished').default('finished'),
+  home_score_full_time: Joi.number().integer().min(0).allow(null).optional(),
+  away_score_full_time: Joi.number().integer().min(0).allow(null).optional(),
+  home_shootout_score: Joi.number().integer().min(0).allow(null).optional(),
+  away_shootout_score: Joi.number().integer().min(0).allow(null).optional(),
 });
 
 adminRouter.put('/matches/:id/result', async (req: Request, res: Response) => {
@@ -26,9 +33,17 @@ adminRouter.put('/matches/:id/result', async (req: Request, res: Response) => {
   await query(
     `UPDATE matches SET
        home_score = $1, away_score = $2, first_scorer_team = $3,
-       status = $4, last_updated = NOW()
-     WHERE id = $5`,
-    [value.home_score, value.away_score, value.first_scorer_team, value.status, matchId]
+       status = $4,
+       home_score_full_time = $5, away_score_full_time = $6,
+       home_shootout_score = $7, away_shootout_score = $8,
+       last_updated = NOW()
+     WHERE id = $9`,
+    [
+      value.home_score, value.away_score, value.first_scorer_team, value.status,
+      value.home_score_full_time ?? null, value.away_score_full_time ?? null,
+      value.home_shootout_score ?? null, value.away_shootout_score ?? null,
+      matchId,
+    ]
   );
 
   if (value.status === 'finished') {

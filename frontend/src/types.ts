@@ -35,6 +35,12 @@ export interface Match {
   home_score: number | null;
   away_score: number | null;
   first_scorer_team: FirstScorer | null;
+  // Knockout-only: end-of-extra-time score, set when match went to ET/pens.
+  // Predictions are still graded against home_score/away_score (90 min).
+  home_score_full_time?: number | null;
+  away_score_full_time?: number | null;
+  home_shootout_score?: number | null;
+  away_shootout_score?: number | null;
 }
 
 export interface MatchPrediction {

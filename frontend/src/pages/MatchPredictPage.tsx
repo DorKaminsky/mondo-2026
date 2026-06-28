@@ -263,6 +263,20 @@ export function MatchPredictPage() {
                   <div style={{ fontWeight: 900, fontSize: 24, color: match.status === 'live' ? '#e8a020' : 'var(--primary)' }}>
                     {match.home_score}–{match.away_score}
                   </div>
+                  {/* Show ET / penalty info when match went past 90' — but make
+                      it clear the score above is the 90-min score used for
+                      grading predictions. */}
+                  {match.status === 'finished' && match.home_score_full_time != null && match.away_score_full_time != null && (
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2, fontWeight: 600 }}>
+                      <div>90' · final regulation</div>
+                      <div style={{ marginTop: 2 }}>
+                        AET: <b>{match.home_score_full_time}–{match.away_score_full_time}</b>
+                        {match.home_shootout_score != null && match.away_shootout_score != null && (
+                          <> · pens <b>{match.home_shootout_score}–{match.away_shootout_score}</b></>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   {match.status === 'live' && (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 3 }}>
                       <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#e53e3e', animation: 'pulse 1.5s infinite' }} />
