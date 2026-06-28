@@ -129,6 +129,58 @@ export async function sendDailySummaryToUser(userId: number, userName: string): 
   });
 }
 
+// Per-prediction receipt push. Sent after every successful save/update so
+// the user has a notification-tray record they can scroll back to as proof
+// of what they predicted. Defaults (auto-created at deadline-1h) also go
+// out so users know they didn't submit a real pick. Best-effort: failures
+// are logged but never block the save itself.
+export interface PredictionReceiptInput {
+  userId: number;
+  matchId: number;
+  homeTeam: string;
+  awayTeam: string;
+  predictionResult: 'home' | 'draw' | 'away';
+  teamAGoals: number;
+  teamBGoals: number;
+  firstScorer: 'home' | 'away' | 'none';
+  goalDifference: number;
+  isDefault: boolean;
+  isUpdate: boolean;
+}
+
+export async function sendPredictionReceipt(p: PredictionReceiptInput): Promise<void> {
+  if (!VAPID_PUBLIC || !VAPID_PRIVATE) return;
+
+  const resultLabel =
+    p.predictionResult === 'home' ? p.homeTeam :
+    p.predictionResult === 'away' ? p.awayTeam : 'Draw';
+  const firstScorerLabel =
+    p.firstScorer === 'home' ? p.homeTeam :
+    p.firstScorer === 'away' ? p.awayTeam : 'No goals';
+
+  const headline = p.isDefault
+    ? `⚠️ Auto-default saved (deadline passed)`
+    : p.isUpdate
+      ? `✓ Prediction updated`
+      : `✓ Prediction saved`;
+
+  const body = [
+    headline,
+    `${p.homeTeam} ${p.teamAGoals}–${p.teamBGoals} ${p.awayTeam}`,
+    `Result: ${resultLabel} · Diff: ${p.goalDifference} · 1st: ${firstScorerLabel}`,
+  ].join('\n');
+
+  try {
+    await sendToUser(p.userId, {
+      title: '⚽ Mondo 2026',
+      body,
+      url: `/predict/${p.matchId}`,
+    });
+  } catch (err) {
+    logger.warn(`sendPredictionReceipt: failed for user ${p.userId} match ${p.matchId}`, { err });
+  }
+}
+
 export async function sendDailySummaryToAll(): Promise<void> {
   // Send to every user with at least one push subscription (players + super_admins).
   // League admins (role = 'admin') are excluded — they oversee, don't compete.

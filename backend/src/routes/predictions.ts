@@ -4,6 +4,8 @@ import { query } from '../db/pool';
 import { authenticate } from '../middleware/auth';
 import { MatchPrediction, Match } from '../types';
 import { scorePrediction } from '../services/scoring';
+import { sendPredictionReceipt } from '../services/push';
+import { logger } from '../utils/logger';
 
 export const predictionsRouter = Router();
 
@@ -44,7 +46,7 @@ predictionsRouter.post('/', authenticate, async (req: Request, res: Response) =>
     return;
   }
 
-  const { rows } = await query<MatchPrediction>(
+  const { rows } = await query<MatchPrediction & { is_update: boolean }>(
     `INSERT INTO match_predictions
        (user_id, match_id, prediction_result, team_a_goals, team_b_goals, first_scorer, goal_difference, is_default)
      VALUES ($1, $2, $3, $4, $5, $6, $7, false)
@@ -56,11 +58,29 @@ predictionsRouter.post('/', authenticate, async (req: Request, res: Response) =>
        goal_difference = EXCLUDED.goal_difference,
        is_default = false,
        submitted_at = NOW()
-     RETURNING *`,
+     RETURNING *, (xmax::text::int > 0) AS is_update`,
     [userId, match_id, prediction_result, team_a_goals, team_b_goals, first_scorer, goal_difference]
   );
 
-  res.status(201).json({ prediction: rows[0] });
+  const saved = rows[0];
+
+  // Fire-and-forget receipt push. The save itself is already persisted; a
+  // push failure must NEVER bubble up to the user as a save error.
+  sendPredictionReceipt({
+    userId,
+    matchId: match_id,
+    homeTeam: match.home_team,
+    awayTeam: match.away_team,
+    predictionResult: saved.prediction_result,
+    teamAGoals: saved.team_a_goals,
+    teamBGoals: saved.team_b_goals,
+    firstScorer: saved.first_scorer,
+    goalDifference: saved.goal_difference,
+    isDefault: false,
+    isUpdate: saved.is_update,
+  }).catch(err => logger.warn('Prediction receipt push failed', { userId, match_id, err }));
+
+  res.status(201).json({ prediction: saved });
 });
 
 // Get all predictions for the current user

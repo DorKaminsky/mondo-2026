@@ -1,6 +1,7 @@
 import { query, getClient } from '../db/pool';
 import { logger } from '../utils/logger';
 import { Match, MatchPrediction } from '../types';
+import { sendPredictionReceipt } from './push';
 
 const GROUP_POINTS_PER_CORRECT = 2;
 const KNOCKOUT_POINTS_PER_CORRECT = 3;
@@ -248,7 +249,7 @@ export async function applyDefaultPredictions(): Promise<void> {
 
   for (const match of matches) {
     // Find competing users (any role except 'admin', must be in a league) without a prediction
-    const { rows: usersWithout } = await query(
+    const { rows: usersWithout } = await query<{ id: number }>(
       `SELECT u.id FROM users u
        LEFT JOIN match_predictions mp ON mp.user_id = u.id AND mp.match_id = $1
        WHERE u.role != 'admin' AND u.league_id IS NOT NULL AND mp.id IS NULL`,
@@ -256,13 +257,31 @@ export async function applyDefaultPredictions(): Promise<void> {
     );
 
     for (const user of usersWithout) {
-      await query(
+      const inserted = await query<{ id: number }>(
         `INSERT INTO match_predictions
            (user_id, match_id, prediction_result, team_a_goals, team_b_goals, first_scorer, goal_difference, is_default)
          VALUES ($1, $2, 'draw', 0, 0, 'none', 0, true)
-         ON CONFLICT DO NOTHING`,
+         ON CONFLICT DO NOTHING
+         RETURNING id`,
         [user.id, match.id]
       );
+      // Only send the receipt push when we actually inserted a default —
+      // ON CONFLICT DO NOTHING means a real prediction already existed.
+      if (inserted.rows.length > 0) {
+        sendPredictionReceipt({
+          userId: user.id,
+          matchId: match.id,
+          homeTeam: match.home_team,
+          awayTeam: match.away_team,
+          predictionResult: 'draw',
+          teamAGoals: 0,
+          teamBGoals: 0,
+          firstScorer: 'none',
+          goalDifference: 0,
+          isDefault: true,
+          isUpdate: false,
+        }).catch(err => logger.warn('Default-receipt push failed', { userId: user.id, matchId: match.id, err }));
+      }
     }
 
     if (usersWithout.length > 0) {
