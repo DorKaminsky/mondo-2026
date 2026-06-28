@@ -133,6 +133,8 @@ export function MatchPredictPage() {
       qc.invalidateQueries({ queryKey: ['my-predictions'] });
       qc.invalidateQueries({ queryKey: ['prediction', matchId] });
       setSaved(true);
+      setConfirming(false);
+      setError('');
       // After save, jump to the next un-predicted match if one exists; otherwise
       // back to the predict list. Computed at click-time via a closure-stable ref.
       setTimeout(() => {
@@ -144,8 +146,11 @@ export function MatchPredictPage() {
       }, 1200);
     },
     onError: (err: unknown) => {
+      // Stay in the modal so the user can retry. Surface the error inline
+      // there so a network/server failure can't be silently lost when the
+      // modal closes too eagerly (incident: 2026-06-28 health-check window).
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setError(msg ?? 'Failed to save prediction');
+      setError(msg ?? 'Failed to save prediction — check your connection and try again.');
     },
   });
 
@@ -664,7 +669,13 @@ export function MatchPredictPage() {
 
         return (
           <div
-            onClick={() => !submit.isPending && setConfirming(false)}
+            onClick={() => {
+              // Don't dismiss while a save is in flight or after a failed save —
+              // the user must see and act on the error.
+              if (submit.isPending) return;
+              if (error) return;
+              setConfirming(false);
+            }}
             style={{
               position: 'fixed', inset: 0,
               background: 'rgba(0,0,0,0.6)',
@@ -745,10 +756,27 @@ export function MatchPredictPage() {
                 </div>
               </div>
 
+              {/* Inline error — surfaced here (not on the page behind the modal)
+                  so failed saves can't be missed when the modal would otherwise
+                  close. Incident: 2026-06-28 — health checks failed during the
+                  deadline rush and the old modal closed before onError fired. */}
+              {error && (
+                <div style={{
+                  margin: '0 16px 12px',
+                  padding: '10px 12px',
+                  background: 'rgba(229,62,62,0.10)',
+                  border: '1px solid rgba(229,62,62,0.3)',
+                  borderRadius: 8,
+                  fontSize: 13, color: '#c53030', fontWeight: 600,
+                }}>
+                  ⚠️ {error}
+                </div>
+              )}
+
               {/* Buttons */}
               <div style={{ display: 'flex', gap: 10, padding: 16, borderTop: '1px solid var(--border)' }}>
                 <button
-                  onClick={() => setConfirming(false)}
+                  onClick={() => { setConfirming(false); setError(''); }}
                   disabled={submit.isPending}
                   style={{
                     flex: 1, padding: '12px', borderRadius: 10,
@@ -763,7 +791,7 @@ export function MatchPredictPage() {
                   ← Edit
                 </button>
                 <button
-                  onClick={() => { setConfirming(false); submit.mutate(); }}
+                  onClick={() => { setError(''); submit.mutate(); }}
                   disabled={submit.isPending}
                   style={{
                     flex: 1.3, padding: '12px', borderRadius: 10,
@@ -775,7 +803,7 @@ export function MatchPredictPage() {
                     opacity: submit.isPending ? 0.6 : 1,
                   }}
                 >
-                  {submit.isPending ? 'Saving…' : diffMismatch ? 'Save anyway' : '✓ Confirm save'}
+                  {submit.isPending ? '⏳ Saving…' : error ? '↻ Try again' : diffMismatch ? 'Save anyway' : '✓ Confirm save'}
                 </button>
               </div>
             </div>
