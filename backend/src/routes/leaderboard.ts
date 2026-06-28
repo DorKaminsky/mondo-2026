@@ -459,16 +459,34 @@ leaderboardRouter.get('/player-picks', authenticate, async (req: Request, res: R
       .normalize('NFD').replace(/[̀-ͯ]/g, '')  // strip diacritics
       .replace(/[^a-z\s]/g, '').replace(/\s+/g, ' ').trim();
   }
+  function editDist(a: string, b: string): number {
+    if (a === b) return 0;
+    if (Math.abs(a.length - b.length) > 2) return 99;
+    const m = a.length, n = b.length;
+    const dp = Array.from({length: m + 1}, (_: unknown, i: number) =>
+      Array.from({length: n + 1}, (_2: unknown, j: number) => (i === 0 ? j : j === 0 ? i : 0))
+    );
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        dp[i][j] = a[i-1] === b[j-1]
+          ? dp[i-1][j-1]
+          : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+      }
+    }
+    return dp[m][n];
+  }
   function namesMatch(stored: string, target: string): boolean {
     const a = normName(stored);
     const b = normName(target);
     if (a === b) return true;
-    // "mbappe" in "kylian mbappe" or vice-versa: every word of the shorter
-    // must appear in the longer (filters out single-letter noise with > 2 chars)
+    // Every word of the shorter name must appear in the longer one.
+    // Allow 1-char typos for parts >= 5 chars (handles "Kilian"→"Kylian" etc.)
     const partsA = a.split(' ').filter(p => p.length > 2);
     const partsB = b.split(' ').filter(p => p.length > 2);
     const [shorter, longer] = partsA.length <= partsB.length ? [partsA, partsB] : [partsB, partsA];
-    return shorter.length > 0 && shorter.every(p => longer.includes(p));
+    return shorter.length > 0 && shorter.every(p =>
+      longer.some(q => q === p || (p.length >= 5 && editDist(p, q) <= 1))
+    );
   }
   // Non-Latin script (Hebrew, Arabic, etc.) can't be auto-matched.
   // Return them separately so the admin can see them and decide manually.
