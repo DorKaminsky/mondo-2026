@@ -438,17 +438,53 @@ leaderboardRouter.get('/player-picks', authenticate, async (req: Request, res: R
   }
 
   const column = kind === 'scorer' ? 'top_scorer_name' : 'top_assister_name';
-  const { rows } = await query<{ id: number; name: string }>(
-    `SELECT u.id, u.name
+
+  // Fetch all predictions for the league and match in JS.
+  // SQL LOWER(TRIM(...)) = LOWER($2) breaks when users spell differently:
+  // "Mbappe" vs "Kylian Mbappé", "Ronaldo" vs "Cristiano Ronaldo", etc.
+  // normName strips diacritics + lowercases; then we check if every word
+  // in the shorter name appears in the longer one (handles partial names).
+  const { rows: allRows } = await query<{ id: number; name: string; player: string | null }>(
+    `SELECT u.id, u.name, p.${column} AS player
        FROM pre_tournament_predictions p
        JOIN users u ON u.id = p.user_id
       WHERE u.league_id = $1
         AND u.role != 'admin'
-        AND LOWER(TRIM(p.${column})) = LOWER($2)
       ORDER BY u.name`,
-    [leagueId, name]
+    [leagueId]
   );
-  res.json({ picks: rows });
+
+  function normName(s: string): string {
+    return s.trim().toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')  // strip diacritics
+      .replace(/[^a-z\s]/g, '').replace(/\s+/g, ' ').trim();
+  }
+  function namesMatch(stored: string, target: string): boolean {
+    const a = normName(stored);
+    const b = normName(target);
+    if (a === b) return true;
+    // "mbappe" in "kylian mbappe" or vice-versa: every word of the shorter
+    // must appear in the longer (filters out single-letter noise with > 2 chars)
+    const partsA = a.split(' ').filter(p => p.length > 2);
+    const partsB = b.split(' ').filter(p => p.length > 2);
+    const [shorter, longer] = partsA.length <= partsB.length ? [partsA, partsB] : [partsB, partsA];
+    return shorter.length > 0 && shorter.every(p => longer.includes(p));
+  }
+  // Non-Latin script (Hebrew, Arabic, etc.) can't be auto-matched.
+  // Return them separately so the admin can see them and decide manually.
+  function isNonLatin(s: string): boolean {
+    return /[^ -ɏ\s]/.test(s);
+  }
+
+  const picks = allRows
+    .filter(r => r.player && namesMatch(r.player, name))
+    .map(r => ({ id: r.id, name: r.name }));
+
+  const unknownPicks = allRows
+    .filter(r => r.player && isNonLatin(r.player) && !namesMatch(r.player, name))
+    .map(r => ({ id: r.id, name: r.name, rawPick: r.player }));
+
+  res.json({ picks, unknownPicks });
 });
 
 leaderboardRouter.get('/stats', authenticate, async (req: Request, res: Response) => {

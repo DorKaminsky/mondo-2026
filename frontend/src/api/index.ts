@@ -121,9 +121,10 @@ export const leaderboardApi = {
       topAssisters: Array<{ espn_athlete_id: string; full_name: string; team_name: string; goals: number; assists: number; matches_played: number }>;
     }>('/leaderboard/tournament-stats').then(r => r.data),
   playerPicks: (name: string, kind: 'scorer' | 'assister') =>
-    api.get<{ picks: Array<{ id: number; name: string }> }>('/leaderboard/player-picks', {
-      params: { name, kind },
-    }).then(r => r.data.picks),
+    api.get<{
+      picks: Array<{ id: number; name: string }>;
+      unknownPicks: Array<{ id: number; name: string; rawPick: string }>;
+    }>('/leaderboard/player-picks', { params: { name, kind } }).then(r => r.data),
   rankHistory: () =>
     api.get<{
       matches: { id: number; label: string; kickoff: string }[];

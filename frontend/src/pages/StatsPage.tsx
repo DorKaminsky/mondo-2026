@@ -335,11 +335,13 @@ export function StatsPage() {
   // picked that player as their pre-tournament top scorer/assister. Backend
   // gates this on deadline so the 403 path here just leaves the modal empty.
   const [picksOpen, setPicksOpen] = useState<{ name: string; kind: 'scorer' | 'assister' } | null>(null);
-  const { data: picks, isLoading: picksLoading } = useQuery({
+  const { data: picksData, isLoading: picksLoading } = useQuery({
     queryKey: ['player-picks', picksOpen?.name, picksOpen?.kind],
     queryFn: () => leaderboardApi.playerPicks(picksOpen!.name, picksOpen!.kind),
     enabled: picksOpen !== null,
   });
+  const picks = picksData?.picks ?? [];
+  const unknownPicks = picksData?.unknownPicks ?? [];
 
   if (isLoading) return <div className="loading"><div className="spinner" /></div>;
 
@@ -542,10 +544,10 @@ export function StatsPage() {
             </div>
             <div style={{ padding: 16, maxHeight: '60vh', overflowY: 'auto' }}>
               {picksLoading && <div className="text-muted" style={{ fontSize: 13, textAlign: 'center' }}>Loading…</div>}
-              {!picksLoading && (!picks || picks.length === 0) && (
+              {!picksLoading && picks.length === 0 && unknownPicks.length === 0 && (
                 <div className="text-muted" style={{ fontSize: 13, textAlign: 'center' }}>No one in your league picked this player.</div>
               )}
-              {!picksLoading && picks && picks.length > 0 && (
+              {!picksLoading && picks.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {picks.map(u => (
                     <Link
@@ -558,6 +560,29 @@ export function StatsPage() {
                       <span style={{ fontWeight: 600, fontSize: 13 }}>{u.name}</span>
                     </Link>
                   ))}
+                </div>
+              )}
+              {!picksLoading && unknownPicks.length > 0 && (
+                <div style={{ marginTop: picks.length > 0 ? 14 : 0 }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Wrote in another language — may mean this player:
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {unknownPicks.map(u => (
+                      <Link
+                        key={u.id}
+                        to={`/player/${u.id}`}
+                        onClick={() => setPicksOpen(null)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'inherit', padding: '6px 4px', opacity: 0.75 }}
+                      >
+                        <div className="avatar" style={{ background: avatarColor(u.name), width: 30, height: 30, fontSize: 11, flexShrink: 0 }}>{initials(u.name)}</div>
+                        <div>
+                          <span style={{ fontWeight: 600, fontSize: 13 }}>{u.name}</span>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>"{u.rawPick}"</span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
