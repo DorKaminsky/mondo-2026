@@ -171,6 +171,10 @@ export async function syncLiveScores(): Promise<void> {
     // so the primary lookup always misses. We fetch all matches for the date and do
     // name normalization in JS to handle aliases ("United States"→"USA", etc.).
     // Self-heals by overwriting the old FIFA ID with the correct ESPN ID.
+    // ESPN also sometimes lists home/away in the opposite order from our DB seeding
+    // (e.g. ESPN "France vs Sweden" but DB "Sweden vs France"). We try both orderings
+    // and set teamsSwapped=true so scores/first_scorer get flipped before writing.
+    let teamsSwapped = false;
     if (rows.length === 0) {
       const homeName: string = homeComp.team?.displayName ?? '';
       const awayName: string = awayComp.team?.displayName ?? '';
@@ -191,14 +195,21 @@ export async function syncLiveScores(): Promise<void> {
            WHERE DATE(kickoff_time_utc) BETWEEN ($1::date - interval '1 day') AND ($1::date + interval '1 day')`,
           [eventDate]
         );
-        const matched = dateMatches.rows.find(m =>
+        let matched = dateMatches.rows.find(m =>
           normTeam(m.home_team) === normTeam(homeName) &&
           normTeam(m.away_team) === normTeam(awayName)
         );
+        if (!matched) {
+          const swappedMatch = dateMatches.rows.find(m =>
+            normTeam(m.home_team) === normTeam(awayName) &&
+            normTeam(m.away_team) === normTeam(homeName)
+          );
+          if (swappedMatch) { matched = swappedMatch; teamsSwapped = true; }
+        }
         if (matched) {
           await query('UPDATE matches SET api_match_id = $1 WHERE id = $2', [espnId, matched.id]);
           rows = [matched];
-          logger.info(`Live sync: mapped ESPN ${espnId} (${homeName} vs ${awayName}) → match ${matched.id} by name`);
+          logger.info(`Live sync: mapped ESPN ${espnId} (${homeName} vs ${awayName}) → match ${matched.id} by name${teamsSwapped ? ' [home/away swapped]' : ''}`);
         }
       }
     }
@@ -210,6 +221,15 @@ export async function syncLiveScores(): Promise<void> {
       continue;
     }
     const match = rows[0];
+
+    // When ESPN lists teams in the opposite home/away order from our DB, flip all
+    // the score values so they align with how the DB stores this match.
+    if (teamsSwapped) {
+      [homeScore, awayScore] = [awayScore, homeScore];
+      [homeScoreFullTime, awayScoreFullTime] = [awayScoreFullTime, homeScoreFullTime];
+      [homeShootoutScore, awayShootoutScore] = [awayShootoutScore, homeShootoutScore];
+      firstScorerTeam = firstScorerTeam === 'home' ? 'away' : firstScorerTeam === 'away' ? 'home' : 'none';
+    }
 
     // Once a match is finished in the DB, don't let the cron overwrite it.
     // This protects manual admin corrections to score/first_scorer_team after the whistle.
