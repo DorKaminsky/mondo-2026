@@ -30,9 +30,10 @@ const TEAM_ALIASES: Record<string, string> = {
   'republic of korea': 'korea republic',
   'iran': 'ir iran',
   'czech republic': 'czechia',
-  'cape verde': 'cabo verde',
+  'cabo verde': 'cape verde',          // ESPN uses "Cabo Verde", DB has "Cape Verde"
   'democratic republic of the congo': 'congo dr',
   'dr congo': 'congo dr',
+  'congo, dr': 'congo dr',
   'bosnia-herzegovina': 'bosnia and herzegovina',
   'bosnia & herzegovina': 'bosnia and herzegovina',
 };
