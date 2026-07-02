@@ -24,10 +24,20 @@ interface PlayerDelta {
 
 // ESPN summary "leaders" gives per-match shot/pass leaders, not goals/assists.
 // The reliable per-match goal/assist data lives in keyEvents:
-//   type.type starts with 'goal' (e.g. 'goal', 'goal---header') — EXCLUDES 'own-goal'
+//   type.type is 'goal' / 'goal---header' / 'goal---free-kick' / 'penalty---scored'
+//     etc. — ANY of these count as a player goal
+//   type.type is 'own-goal' — EXCLUDED (nobody gets a personal goal for scoring
+//     into their own net)
 //   participants[0] = scorer, participants[1] (optional) = assister
 // We accumulate deltas per match then UPSERT additively. matches_played is
 // incremented once per athlete per match (set membership from all key events).
+function isGoalEvent(typeKey: string): boolean {
+  if (typeKey === 'own-goal') return false;
+  if (typeKey.startsWith('goal')) return true;         // 'goal', 'goal---header', ...
+  if (typeKey === 'penalty---scored') return true;     // in-play penalties (NOT shootouts)
+  return false;
+}
+
 export async function syncMatchPlayerStats(espnEventId: string): Promise<void> {
   const { data } = await axios.get(ESPN_SUMMARY, {
     params: { event: espnEventId },
@@ -51,9 +61,21 @@ export async function syncMatchPlayerStats(espnEventId: string): Promise<void> {
   };
 
   for (const e of keyEvents) {
+    // Skip shootout events entirely — pens in shootouts don't count for
+    // player goal totals (or for scoring predictions).
+    if (e?.shootout) continue;
+
+    // Also skip extra-time goals. Predictions are graded on the 90-minute
+    // score, and the "top scorer" pre-tournament pick likewise should be
+    // graded against regulation-time scoring only. 90 min = 5400 seconds on
+    // ESPN's clock (stoppage-time goals get clock.value clamped to 5400
+    // and DO count).
+    const clk = e?.clock?.value;
+    if (typeof clk === 'number' && clk > 5400) continue;
+
     const teamName: string = e.team?.displayName ?? '';
     const typeKey: string = e.type?.type ?? '';
-    const isGoal = typeKey.startsWith('goal') && typeKey !== 'own-goal';
+    const isGoal = isGoalEvent(typeKey);
     const participants: any[] = e.participants ?? [];
 
     // Mark every athlete who appears in any key event as having played
