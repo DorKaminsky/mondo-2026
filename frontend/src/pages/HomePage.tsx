@@ -461,6 +461,38 @@ export function HomePage() {
         </Link>
       )}
 
+      {/* ── Bracket CTA — prominent link to the tournament tree ─────── */}
+      <Link
+        to="/bracket"
+        style={{
+          display: 'block',
+          background: 'linear-gradient(135deg, #14284a 0%, #1e3a6a 100%)',
+          border: '1px solid rgba(102,224,165,0.35)',
+          borderRadius: 14,
+          padding: '14px 16px',
+          marginBottom: 14,
+          textDecoration: 'none',
+          color: 'white',
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#66e0a5', letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: 4 }}>
+              Knockouts
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 900, letterSpacing: '-0.01em' }}>
+              🏆 Road to the Final
+            </div>
+            <div style={{ fontSize: 12, opacity: 0.7, marginTop: 3 }}>
+              R16 → QF → SF → Final
+            </div>
+          </div>
+          <div style={{ fontSize: 40, opacity: 0.8, flexShrink: 0 }}>🎯</div>
+        </div>
+      </Link>
+
       {/* ── Live matches ─────────────────────────── */}
       {live && live.length > 0 && (
         <section style={{ marginBottom: 20 }}>
