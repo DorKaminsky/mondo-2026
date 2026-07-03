@@ -270,7 +270,16 @@ export function BracketPage() {
     queryFn: matchesApi.all,
   });
   const [hasAnimated, setHasAnimated] = useState(false);
-  useEffect(() => { setHasAnimated(true); }, []);
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' && window.innerWidth <= 768
+  );
+
+  useEffect(() => {
+    setHasAnimated(true);
+    const onResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   if (isLoading || !matches) return <div className="loading"><div className="spinner" /></div>;
 
@@ -427,7 +436,7 @@ export function BracketPage() {
         World Cup 2026 · Knockout Stage
       </div>
 
-      <div className="bracket-grid">
+      {!isMobile && <div className="bracket-grid">
         {/* Round headers (desktop only, per column) */}
         <div className="bracket-round-label">R16</div>
         <div className="bracket-round-label">QF</div>
@@ -470,10 +479,10 @@ export function BracketPage() {
         <RoundColumn matchNumbers={BRACKET.rightSF}  matches={matches} side="right" delay={0.55} />
         <RoundColumn matchNumbers={BRACKET.rightQF}  matches={matches} side="right" delay={0.35} />
         <RoundColumn matchNumbers={BRACKET.rightR16} matches={matches} side="right" delay={0.15} />
-      </div>
+      </div>}
 
-      {/* MOBILE layout — vertical stack by round. Hidden on desktop via CSS. */}
-      <div className="bracket-mobile">
+      {/* MOBILE layout — vertical stack by round. Rendered only on narrow screens. */}
+      {isMobile && <div className="bracket-mobile">
         <MobileRound label="Round of 16" matchNumbers={[...BRACKET.leftR16, ...BRACKET.rightR16]} matches={matches} delay={0.15} />
         <MobileRound label="Quarter-Finals" matchNumbers={[...BRACKET.leftQF, ...BRACKET.rightQF]} matches={matches} delay={0.30} />
         <MobileRound label="Semi-Finals" matchNumbers={[...BRACKET.leftSF, ...BRACKET.rightSF]} matches={matches} delay={0.45} />
@@ -485,7 +494,7 @@ export function BracketPage() {
           <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.55)', letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: 8 }}>3rd Place</div>
           <MobileMatchRow match={thirdMatch} />
         </div>
-      </div>
+      </div>}
 
       <div style={{ textAlign: 'center', marginTop: 30 }}>
         <Link to="/predict" style={{
