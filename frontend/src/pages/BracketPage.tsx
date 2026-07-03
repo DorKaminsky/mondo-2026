@@ -184,81 +184,183 @@ function FinalPill({ match }: { match?: Match }) {
   );
 }
 
-// Mobile-only helpers: a single match row (one card per pairing) and a
-// section-per-round wrapper.
-function MobileMatchRow({ match, big }: { match?: Match; big?: boolean }) {
-  const home = teamLabel(match?.home_team);
-  const away = teamLabel(match?.away_team);
-  const finished = match?.status === 'finished';
-  const hs = match?.home_score;
-  const as_ = match?.away_score;
-  const homeClr = home ? teamColor(home) : '#334';
-  const awayClr = away ? teamColor(away) : '#334';
-  const fontSize = big ? 15 : 12;
-  const flagSize = big ? 34 : 26;
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1, justifyContent: 'flex-end' }}>
-        <span style={{ fontSize, fontWeight: 700, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{home || 'TBD'}</span>
-        <div style={{ width: flagSize, height: flagSize, borderRadius: '50%', background: homeClr, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: flagSize * 0.55, border: '1.5px solid rgba(255,255,255,0.12)', flexShrink: 0 }}>{home ? flag(home) : '?'}</div>
-      </div>
-      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', fontWeight: 700, minWidth: 30, textAlign: 'center' }}>
-        {finished && hs != null && as_ != null ? `${hs}–${as_}` : 'vs'}
-      </span>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
-        <div style={{ width: flagSize, height: flagSize, borderRadius: '50%', background: awayClr, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: flagSize * 0.55, border: '1.5px solid rgba(255,255,255,0.12)', flexShrink: 0 }}>{away ? flag(away) : '?'}</div>
-        <span style={{ fontSize, fontWeight: 700, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{away || 'TBD'}</span>
-      </div>
-    </div>
-  );
-}
+// Mobile "Road to the Final" bracket. Flags in far-left and far-right
+// columns only, curved connector lines converging to a trophy in the
+// middle. Matches the vibe of a printed FIFA-style bracket.
+function MobileBracket({ matches, hasAnimated }: { matches: Match[]; hasAnimated: boolean }) {
+  // Geometry constants. R16 matches take 2 flag circles each (home + away).
+  // 4 matches per side × 2 flags = 8 vertical flag slots per side.
+  const flagSize = 28;
+  const flagGap = 6;          // gap between the 2 flags inside a pairing
+  const pairGap = 22;         // gap between pairings (match slots)
+  const bracketWidth = 340;   // total SVG viewport width (scaled to phone)
+  const colFlagX = 20;        // left flag column center X
+  const colConnStart = colFlagX + flagSize + 8;   // where connector line starts
 
-function MobileRound({ label, matchNumbers, matches, delay }: {
-  label: string; matchNumbers: number[]; matches: Match[]; delay: number;
-}) {
-  return (
-    <div className="bracket-mobile-round" style={{ animation: `bracket-fade-in 0.6s ease-out ${delay}s both` }}>
-      <div className="bracket-mobile-round-title">
-        <div className="bracket-mobile-round-title-line" />
-        <div className="bracket-mobile-round-title-label">{label}</div>
-        <div className="bracket-mobile-round-title-line" />
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {matchNumbers.map(mn => {
-          const m = matches.find(x => x.match_number === mn);
-          const finished = m?.status === 'finished';
-          const hs = m?.home_score;
-          const as_ = m?.away_score;
-          const home = teamLabel(m?.home_team);
-          const away = teamLabel(m?.away_team);
-          let winnerLabel = '';
-          if (finished && hs != null && as_ != null && home && away) {
-            if (hs > as_) winnerLabel = home + ' advanced';
-            else if (as_ > hs) winnerLabel = away + ' advanced';
-            else winnerLabel = 'draw (pens or ET decided)';
-          }
+  // Y positions of each pairing (top of pair, i.e. top edge of home flag)
+  const pairHeight = flagSize * 2 + flagGap;
+  const pairYs = [
+    0,
+    pairHeight + pairGap,
+    (pairHeight + pairGap) * 2,
+    (pairHeight + pairGap) * 3,
+  ];
+  const totalHeight = (pairHeight + pairGap) * 4 - pairGap; // 4 pairings
+
+  // For each pairing, center Y (midpoint of the two flags)
+  const pairCenterY = (yTop: number) => yTop + flagSize + flagGap / 2;
+
+  // QF connector target Y = midpoint of two consecutive pairings
+  const qfYs = [
+    (pairCenterY(pairYs[0]) + pairCenterY(pairYs[1])) / 2,
+    (pairCenterY(pairYs[2]) + pairCenterY(pairYs[3])) / 2,
+  ];
+  // SF connector target Y = midpoint of two QF slots
+  const sfY = (qfYs[0] + qfYs[1]) / 2;
+
+  // Column X positions on left side
+  const xQF = colConnStart + 30;
+  const xSF = xQF + 26;
+  const xFinal = bracketWidth / 2;
+
+  // Mirror for right side
+  const mirror = (x: number) => bracketWidth - x;
+
+  // Bracket data
+  const leftR16 = BRACKET.leftR16.map(mn => matches.find(m => m.match_number === mn));
+  const rightR16 = BRACKET.rightR16.map(mn => matches.find(m => m.match_number === mn));
+  const finalMatch = matches.find(m => m.match_number === 104);
+
+  // Draw a single pairing (two flags stacked, then connector lines to QF slot)
+  const renderPairing = (m: Match | undefined, side: 'left' | 'right', pairIdx: number) => {
+    const yTop = pairYs[pairIdx];
+    const homeName = teamLabel(m?.home_team);
+    const awayName = teamLabel(m?.away_team);
+    const homeClr = homeName ? teamColor(homeName) : '#334';
+    const awayClr = awayName ? teamColor(awayName) : '#334';
+    const finished = m?.status === 'finished';
+    const hs = m?.home_score;
+    const as_ = m?.away_score;
+    const homeLost = finished && hs != null && as_ != null && hs < as_;
+    const awayLost = finished && hs != null && as_ != null && as_ < hs;
+    const cx = side === 'left' ? colFlagX + flagSize / 2 : mirror(colFlagX + flagSize / 2);
+    return (
+      <g key={`${side}-p${pairIdx}`}>
+        {/* Home flag */}
+        <circle cx={cx} cy={yTop + flagSize / 2} r={flagSize / 2}
+          fill={homeClr}
+          stroke="rgba(255,255,255,0.15)" strokeWidth="1.5"
+          opacity={homeLost ? 0.35 : 1}
+        />
+        <text x={cx} y={yTop + flagSize / 2 + 6} textAnchor="middle" fontSize="16" opacity={homeLost ? 0.35 : 1}>
+          {homeName ? flag(homeName) : '?'}
+        </text>
+        {/* Away flag */}
+        <circle cx={cx} cy={yTop + flagSize + flagGap + flagSize / 2} r={flagSize / 2}
+          fill={awayClr}
+          stroke="rgba(255,255,255,0.15)" strokeWidth="1.5"
+          opacity={awayLost ? 0.35 : 1}
+        />
+        <text x={cx} y={yTop + flagSize + flagGap + flagSize / 2 + 6} textAnchor="middle" fontSize="16" opacity={awayLost ? 0.35 : 1}>
+          {awayName ? flag(awayName) : '?'}
+        </text>
+      </g>
+    );
+  };
+
+  // Connector lines from a pair pair-of-pairings to their QF slot
+  const renderConnectors = (side: 'left' | 'right') => {
+    const stroke = 'rgba(255,255,255,0.30)';
+    const sw = 1.5;
+    const sign = side === 'left' ? 1 : -1;
+    const x0 = side === 'left' ? colConnStart : mirror(colConnStart);
+    const xQ = side === 'left' ? xQF : mirror(xQF);
+    const xS = side === 'left' ? xSF : mirror(xSF);
+    return (
+      <g>
+        {/* 4 R16 → 2 QF */}
+        {pairYs.map((py, i) => {
+          const cy = pairCenterY(py);
+          const qfY = qfYs[Math.floor(i / 2)];
           return (
-            <div
-              key={mn}
-              style={{
-                background: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(255,255,255,0.10)',
-                borderRadius: 10,
-                padding: '10px 14px',
-              }}
-            >
-              <MobileMatchRow match={m} />
-              {winnerLabel && (
-                <div style={{
-                  textAlign: 'center', fontSize: 10, color: '#66e0a5',
-                  marginTop: 6, fontWeight: 700, letterSpacing: '0.04em',
-                }}>
-                  ✓ {winnerLabel}
-                </div>
-              )}
-            </div>
+            <g key={`c${side}-${i}`}>
+              <line x1={x0} y1={cy} x2={xQ} y2={cy} stroke={stroke} strokeWidth={sw} />
+              <line x1={xQ} y1={cy} x2={xQ} y2={qfY} stroke={stroke} strokeWidth={sw} />
+            </g>
           );
         })}
+        {/* Empty QF "shield" circles */}
+        {qfYs.map((qy, i) => (
+          <circle key={`qf${side}-${i}`} cx={xQ + sign * 3} cy={qy} r="10"
+            fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.2)" strokeWidth="1"
+          />
+        ))}
+        {/* 2 QF → 1 SF */}
+        {qfYs.map((qy, i) => (
+          <g key={`qs${side}-${i}`}>
+            <line x1={xQ + sign * 10} y1={qy} x2={xS} y2={qy} stroke={stroke} strokeWidth={sw} />
+            <line x1={xS} y1={qy} x2={xS} y2={sfY} stroke={stroke} strokeWidth={sw} />
+          </g>
+        ))}
+        {/* Empty SF "shield" circle */}
+        <circle cx={xS + sign * 3} cy={sfY} r="10"
+          fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.2)" strokeWidth="1"
+        />
+        {/* SF → Final */}
+        <line x1={xS + sign * 10} y1={sfY} x2={xFinal} y2={sfY} stroke={stroke} strokeWidth={sw} />
+      </g>
+    );
+  };
+
+  return (
+    <div style={{
+      textAlign: 'center',
+      animation: hasAnimated ? 'bracket-fade-in 0.6s 0.15s both' : undefined,
+    }}>
+      <svg
+        viewBox={`0 0 ${bracketWidth} ${totalHeight + 60}`}
+        style={{ width: '100%', maxWidth: 400, height: 'auto', display: 'block', margin: '0 auto' }}
+      >
+        {/* Left side pairings */}
+        {leftR16.map((m, i) => renderPairing(m, 'left', i))}
+        {/* Right side pairings */}
+        {rightR16.map((m, i) => renderPairing(m, 'right', i))}
+        {/* Connectors */}
+        {renderConnectors('left')}
+        {renderConnectors('right')}
+        {/* Final pill in the middle */}
+        <g>
+          <rect
+            x={xFinal - 46} y={sfY - 16}
+            width={92} height={32} rx={12}
+            fill="rgba(102,224,165,0.15)"
+            stroke="rgba(102,224,165,0.5)" strokeWidth="1.5"
+          />
+          <text x={xFinal} y={sfY - 20} textAnchor="middle" fontSize="9" fontWeight="700" fill="#66e0a5" letterSpacing="1.5">
+            FINAL
+          </text>
+          <text x={xFinal} y={sfY + 5} textAnchor="middle" fontSize="16">
+            {teamLabel(finalMatch?.home_team) ? flag(finalMatch!.home_team) : '?'}
+            {' '}vs{' '}
+            {teamLabel(finalMatch?.away_team) ? flag(finalMatch!.away_team) : '?'}
+          </text>
+        </g>
+      </svg>
+      {/* Trophy below the tree */}
+      <div className="bracket-trophy" style={{ fontSize: 72, lineHeight: 1, marginTop: 12 }}>🏆</div>
+      <div style={{
+        fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.55)',
+        letterSpacing: '0.10em', textTransform: 'uppercase', marginTop: 14,
+      }}>3rd Place</div>
+      <div style={{
+        display: 'inline-flex', gap: 8, alignItems: 'center', justifyContent: 'center',
+        marginTop: 6, padding: '5px 12px',
+        background: 'rgba(255,255,255,0.05)', borderRadius: 8,
+        border: '1px solid rgba(255,255,255,0.10)',
+      }}>
+        <span style={{ fontSize: 18 }}>{teamLabel(matches.find(m => m.match_number === 103)?.home_team) ? flag(matches.find(m => m.match_number === 103)!.home_team) : '?'}</span>
+        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>vs</span>
+        <span style={{ fontSize: 18 }}>{teamLabel(matches.find(m => m.match_number === 103)?.away_team) ? flag(matches.find(m => m.match_number === 103)!.away_team) : '?'}</span>
       </div>
     </div>
   );
@@ -481,20 +583,9 @@ export function BracketPage() {
         <RoundColumn matchNumbers={BRACKET.rightR16} matches={matches} side="right" delay={0.15} />
       </div>}
 
-      {/* MOBILE layout — vertical stack by round. Rendered only on narrow screens. */}
-      {isMobile && <div className="bracket-mobile">
-        <MobileRound label="Round of 16" matchNumbers={[...BRACKET.leftR16, ...BRACKET.rightR16]} matches={matches} delay={0.15} />
-        <MobileRound label="Quarter-Finals" matchNumbers={[...BRACKET.leftQF, ...BRACKET.rightQF]} matches={matches} delay={0.30} />
-        <MobileRound label="Semi-Finals" matchNumbers={[...BRACKET.leftSF, ...BRACKET.rightSF]} matches={matches} delay={0.45} />
-        <div className="bracket-mobile-final" style={{ animation: hasAnimated ? 'bracket-fade-in 0.6s 0.6s both' : undefined }}>
-          <div className="bracket-trophy" style={{ fontSize: 72, lineHeight: 1, marginBottom: 8 }}>🏆</div>
-          <div style={{ fontSize: 12, fontWeight: 800, color: '#66e0a5', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>Final</div>
-          <MobileMatchRow match={finalMatch} big />
-          <div style={{ height: 1, background: 'rgba(255,255,255,0.15)', margin: '18px 0 12px' }} />
-          <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.55)', letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: 8 }}>3rd Place</div>
-          <MobileMatchRow match={thirdMatch} />
-        </div>
-      </div>}
+      {/* MOBILE layout — real bracket-style tree with SVG connectors and
+          flags only on the outer edges, converging toward the trophy. */}
+      {isMobile && <MobileBracket matches={matches} hasAnimated={hasAnimated} />}
 
       <div style={{ textAlign: 'center', marginTop: 30 }}>
         <Link to="/predict" style={{
