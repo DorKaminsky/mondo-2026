@@ -32,9 +32,15 @@ import { Match } from '../types';
 // Actually FIFA's bracket doesn't strictly split like this — the seed feeds
 // are: W89 W90 → 97; W91 W92 → 98; W93 W94 → 99; W95 W96 → 100.
 // SF: W97 W98 → 101; W99 W100 → 102. Final: W101 W102 → 104. 3rd place: L101 L102 → 103.
+// FIFA bracket structure. Feeds:
+//   QF 97 = W89 ∪ W90        QF 98 = W93 ∪ W94        SF 101 = W97 ∪ W98
+//   QF 99 = W91 ∪ W92        QF 100 = W95 ∪ W96       SF 102 = W99 ∪ W100
+//   Final 104 = W101 ∪ W102
+// So SF 101 aggregates R16 matches 89, 90, 93, 94 (left half of bracket);
+// SF 102 aggregates 91, 92, 95, 96 (right half).
 const BRACKET = {
-  leftR16:   [89, 90, 91, 92],  // top half of tree
-  rightR16:  [93, 94, 95, 96],  // bottom half of tree
+  leftR16:   [89, 90, 93, 94],  // top half of tree → SF 101
+  rightR16:  [91, 92, 95, 96],  // bottom half of tree → SF 102
   leftQF:    [97, 98],
   rightQF:   [99, 100],
   leftSF:    [101],
