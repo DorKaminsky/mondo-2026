@@ -184,6 +184,86 @@ function FinalPill({ match }: { match?: Match }) {
   );
 }
 
+// Mobile-only helpers: a single match row (one card per pairing) and a
+// section-per-round wrapper.
+function MobileMatchRow({ match, big }: { match?: Match; big?: boolean }) {
+  const home = teamLabel(match?.home_team);
+  const away = teamLabel(match?.away_team);
+  const finished = match?.status === 'finished';
+  const hs = match?.home_score;
+  const as_ = match?.away_score;
+  const homeClr = home ? teamColor(home) : '#334';
+  const awayClr = away ? teamColor(away) : '#334';
+  const fontSize = big ? 15 : 12;
+  const flagSize = big ? 34 : 26;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1, justifyContent: 'flex-end' }}>
+        <span style={{ fontSize, fontWeight: 700, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{home || 'TBD'}</span>
+        <div style={{ width: flagSize, height: flagSize, borderRadius: '50%', background: homeClr, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: flagSize * 0.55, border: '1.5px solid rgba(255,255,255,0.12)', flexShrink: 0 }}>{home ? flag(home) : '?'}</div>
+      </div>
+      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', fontWeight: 700, minWidth: 30, textAlign: 'center' }}>
+        {finished && hs != null && as_ != null ? `${hs}–${as_}` : 'vs'}
+      </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+        <div style={{ width: flagSize, height: flagSize, borderRadius: '50%', background: awayClr, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: flagSize * 0.55, border: '1.5px solid rgba(255,255,255,0.12)', flexShrink: 0 }}>{away ? flag(away) : '?'}</div>
+        <span style={{ fontSize, fontWeight: 700, color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{away || 'TBD'}</span>
+      </div>
+    </div>
+  );
+}
+
+function MobileRound({ label, matchNumbers, matches, delay }: {
+  label: string; matchNumbers: number[]; matches: Match[]; delay: number;
+}) {
+  return (
+    <div className="bracket-mobile-round" style={{ animation: `bracket-fade-in 0.6s ease-out ${delay}s both` }}>
+      <div className="bracket-mobile-round-title">
+        <div className="bracket-mobile-round-title-line" />
+        <div className="bracket-mobile-round-title-label">{label}</div>
+        <div className="bracket-mobile-round-title-line" />
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {matchNumbers.map(mn => {
+          const m = matches.find(x => x.match_number === mn);
+          const finished = m?.status === 'finished';
+          const hs = m?.home_score;
+          const as_ = m?.away_score;
+          const home = teamLabel(m?.home_team);
+          const away = teamLabel(m?.away_team);
+          let winnerLabel = '';
+          if (finished && hs != null && as_ != null && home && away) {
+            if (hs > as_) winnerLabel = home + ' advanced';
+            else if (as_ > hs) winnerLabel = away + ' advanced';
+            else winnerLabel = 'draw (pens or ET decided)';
+          }
+          return (
+            <div
+              key={mn}
+              style={{
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.10)',
+                borderRadius: 10,
+                padding: '10px 14px',
+              }}
+            >
+              <MobileMatchRow match={m} />
+              {winnerLabel && (
+                <div style={{
+                  textAlign: 'center', fontSize: 10, color: '#66e0a5',
+                  marginTop: 6, fontWeight: 700, letterSpacing: '0.04em',
+                }}>
+                  ✓ {winnerLabel}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function BracketPage() {
   const { data: matches, isLoading } = useQuery({
     queryKey: ['matches'],
@@ -242,9 +322,12 @@ export function BracketPage() {
           margin-bottom: 22px;
         }
 
+        /* Default: desktop grid visible, mobile block hidden. */
+        .bracket-mobile { display: none; }
+        .bracket-grid { display: grid; }
+
         /* Desktop layout (landscape). Horizontal tree. */
         .bracket-grid {
-          display: grid;
           grid-template-columns: 1fr 1fr 1fr auto 1fr 1fr 1fr;
           gap: 8px;
           max-width: 1200px;
@@ -261,28 +344,79 @@ export function BracketPage() {
           margin-bottom: 6px;
         }
 
-        /* Mobile layout (portrait). Vertical tree — flags on left/right edges,
-           bracket lines curving inward to center trophy. */
+        /* Mobile layout (portrait). Vertical stack by round. */
         @media (max-width: 768px) {
-          .bracket-grid {
+          /* Hide the whole desktop grid on mobile */
+          .bracket-grid { display: none; }
+          .bracket-mobile { display: block; }
+          .bracket-mobile-round {
+            margin-bottom: 22px;
+          }
+          .bracket-mobile-round-title {
+            display: flex; align-items: center; gap: 10px;
+            margin-bottom: 10px;
+          }
+          .bracket-mobile-round-title-line {
+            flex: 1; height: 1px;
+            background: linear-gradient(90deg, rgba(255,255,255,0.1), rgba(255,255,255,0.35), rgba(255,255,255,0.1));
+          }
+          .bracket-mobile-round-title-label {
+            font-size: 11px; font-weight: 800;
+            color: rgba(255,255,255,0.75);
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            padding: 0 4px;
+          }
+          .bracket-mobile-matches {
+            display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 4px;
+            gap: 8px;
           }
-          .bracket-mid-col, .bracket-round-label {
-            display: none;
-          }
-          .bracket-mobile-center {
-            grid-column: 1 / -1;
+          .bracket-mobile-match {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.10);
+            border-radius: 10px;
+            padding: 8px 10px;
             display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 16px 0;
+            flex-direction: column;
+            gap: 6px;
+          }
+          .bracket-mobile-match-row {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 12px; font-weight: 700; color: white;
+            min-width: 0;
+          }
+          .bracket-mobile-match-flag {
+            width: 26px; height: 26px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 15px;
+            border: 1.5px solid rgba(255,255,255,0.12);
+            flex-shrink: 0;
+          }
+          .bracket-mobile-match-team {
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+          }
+          .bracket-mobile-score {
+            text-align: center;
+            font-size: 11px;
+            font-weight: 800;
+            color: rgba(255,255,255,0.7);
+            background: rgba(0,0,0,0.35);
+            padding: 2px 6px;
+            border-radius: 4px;
+            align-self: center;
+          }
+          .bracket-mobile-final {
+            text-align: center;
+            margin: 8px 0 24px;
+            padding: 20px 16px;
+            background: linear-gradient(180deg, rgba(102,224,165,0.14), rgba(102,224,165,0.04));
+            border: 1.5px solid rgba(102,224,165,0.4);
+            border-radius: 16px;
           }
         }
         @media (min-width: 769px) {
-          .bracket-mobile-center {
-            display: none;
-          }
+          .bracket-mobile { display: none; }
         }
       `}</style>
 
@@ -308,7 +442,7 @@ export function BracketPage() {
         <RoundColumn matchNumbers={BRACKET.leftQF}  matches={matches} side="left" delay={0.35} />
         <RoundColumn matchNumbers={BRACKET.leftSF}  matches={matches} side="left" delay={0.55} />
 
-        {/* CENTER (Final + trophy + 3rd place) */}
+        {/* CENTER (Final + trophy + 3rd place) — DESKTOP ONLY */}
         <div className="bracket-mid-col" style={{
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, padding: '0 12px',
           animation: hasAnimated ? 'bracket-fade-in 0.6s 0.7s both' : undefined,
@@ -336,31 +470,20 @@ export function BracketPage() {
         <RoundColumn matchNumbers={BRACKET.rightSF}  matches={matches} side="right" delay={0.55} />
         <RoundColumn matchNumbers={BRACKET.rightQF}  matches={matches} side="right" delay={0.35} />
         <RoundColumn matchNumbers={BRACKET.rightR16} matches={matches} side="right" delay={0.15} />
+      </div>
 
-        {/* Mobile-only trophy row (spans full width) */}
-        <div className="bracket-mobile-center">
-          <div style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14,
-            animation: hasAnimated ? 'bracket-fade-in 0.6s 0.7s both' : undefined,
-          }}>
-            <FinalPill match={finalMatch} />
-            <div className="bracket-trophy" style={{ fontSize: 72, lineHeight: 1 }}>🏆</div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{
-                fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.5)',
-                textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6,
-              }}>3rd Place</div>
-              <div style={{
-                display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center',
-                background: 'rgba(255,255,255,0.05)', padding: '6px 10px', borderRadius: 8,
-                border: '1px solid rgba(255,255,255,0.10)',
-              }}>
-                <TeamCell team={teamLabel(thirdMatch?.home_team)} />
-                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>vs</span>
-                <TeamCell team={teamLabel(thirdMatch?.away_team)} side="right" />
-              </div>
-            </div>
-          </div>
+      {/* MOBILE layout — vertical stack by round. Hidden on desktop via CSS. */}
+      <div className="bracket-mobile">
+        <MobileRound label="Round of 16" matchNumbers={[...BRACKET.leftR16, ...BRACKET.rightR16]} matches={matches} delay={0.15} />
+        <MobileRound label="Quarter-Finals" matchNumbers={[...BRACKET.leftQF, ...BRACKET.rightQF]} matches={matches} delay={0.30} />
+        <MobileRound label="Semi-Finals" matchNumbers={[...BRACKET.leftSF, ...BRACKET.rightSF]} matches={matches} delay={0.45} />
+        <div className="bracket-mobile-final" style={{ animation: hasAnimated ? 'bracket-fade-in 0.6s 0.6s both' : undefined }}>
+          <div className="bracket-trophy" style={{ fontSize: 72, lineHeight: 1, marginBottom: 8 }}>🏆</div>
+          <div style={{ fontSize: 12, fontWeight: 800, color: '#66e0a5', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>Final</div>
+          <MobileMatchRow match={finalMatch} big />
+          <div style={{ height: 1, background: 'rgba(255,255,255,0.15)', margin: '18px 0 12px' }} />
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.55)', letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: 8 }}>3rd Place</div>
+          <MobileMatchRow match={thirdMatch} />
         </div>
       </div>
 
