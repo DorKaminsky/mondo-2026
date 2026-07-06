@@ -96,17 +96,19 @@ export async function syncMatchPlayerStats(espnEventId: string): Promise<void> {
   }
 
   for (const [id, d] of deltas.entries()) {
+    // ponytail: only update players who already have a row in player_stats
+    // (the watchlist). This keeps the table small — we don't need every
+    // athlete who ever touched a keyEvent, only the ones users predicted +
+    // real-world leaders. New watchlist entries are added manually.
     await query(
-      `INSERT INTO player_stats
-         (espn_athlete_id, full_name, team_name, goals, assists, matches_played, last_synced_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())
-       ON CONFLICT (espn_athlete_id) DO UPDATE SET
-         full_name      = EXCLUDED.full_name,
-         team_name      = EXCLUDED.team_name,
-         goals          = player_stats.goals          + EXCLUDED.goals,
-         assists        = player_stats.assists        + EXCLUDED.assists,
-         matches_played = player_stats.matches_played + EXCLUDED.matches_played,
-         last_synced_at = NOW()`,
+      `UPDATE player_stats SET
+         full_name      = $2,
+         team_name      = $3,
+         goals          = goals          + $4,
+         assists        = assists        + $5,
+         matches_played = matches_played + $6,
+         last_synced_at = NOW()
+       WHERE espn_athlete_id = $1`,
       [id, d.full_name, d.team_name, d.goals, d.assists, d.played ? 1 : 0]
     );
   }
