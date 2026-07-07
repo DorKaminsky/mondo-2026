@@ -2,6 +2,7 @@ import axios from 'axios';
 import { query } from '../db/pool';
 import { calculateMatchScores } from './scoring';
 import { syncMatchPlayerStats } from './playerStats';
+import { flowKnockoutOutcome } from './bracketFlow';
 import { logger } from '../utils/logger';
 
 const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard';
@@ -293,6 +294,18 @@ export async function syncLiveScores(): Promise<void> {
         } catch (err) {
           logger.warn(`Live sync: player stats failed for match ${match.id}`, { err });
         }
+      }
+      // Flow the knockout outcome into the next round (winner → QF/SF/Final,
+      // SF losers → 3rd-place). Safe on group matches: bracketFlow only
+      // knows about knockout match_numbers and no-ops on unknowns.
+      try {
+        const { rows: mrow } = await query<{ match_number: number }>(
+          'SELECT match_number FROM matches WHERE id = $1',
+          [match.id]
+        );
+        if (mrow[0]) await flowKnockoutOutcome(mrow[0].match_number);
+      } catch (err) {
+        logger.warn(`Live sync: bracket flow failed for match ${match.id}`, { err });
       }
     }
   }
