@@ -18,12 +18,9 @@ matchesRouter.get('/upcoming', authenticate, async (_req: Request, res: Response
   // Returns the NEXT 10 not-yet-finished matches by kickoff time.
   // 10 is intentional: keeps Home page + "you haven't predicted X" banner
   // bounded to a sensible near-horizon. For full schedule, use GET /matches.
-  // Excludes the 3rd-place playoff — not predicted in this league.
   const { rows } = await query<Match>(
     `SELECT * FROM matches
      WHERE status = 'scheduled'
-       AND home_team NOT LIKE '%third place%'
-       AND away_team NOT LIKE '%third place%'
      ORDER BY kickoff_time_utc ASC
      LIMIT 10`
   );

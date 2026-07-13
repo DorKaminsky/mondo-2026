@@ -159,14 +159,7 @@ export function PredictPage() {
 
   const predMap = new Map(myPredictions?.map(p => [p.match_id, p]));
 
-  // 3rd-place playoff is not predicted in this league — hide it everywhere.
-  // ponytail: name-match is enough; the row stays in the DB untouched.
-  const predictable = useMemo(
-    () => (matches ?? []).filter(m => !m.home_team.includes('third place') && !m.away_team.includes('third place')),
-    [matches]
-  );
-
-  const filtered = useMemo(() => applyFilter(predictable, filter), [predictable, filter]);
+  const filtered = useMemo(() => applyFilter(matches ?? [], filter), [matches, filter]);
 
   // Past tab: latest games at the top. Other tabs: chronological (earliest first).
   const orderedFiltered = useMemo(() => {
