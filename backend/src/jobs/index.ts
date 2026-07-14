@@ -46,25 +46,25 @@ async function isInMatchWindow(): Promise<boolean> {
 }
 
 export function startJobs() {
-  // Apply default predictions every 15 minutes.
-  cron.schedule('*/15 * * * *', async () => {
-    try {
-      await applyDefaultPredictions();
-    } catch (err) {
-      logger.error('Default predictions job failed', { err });
-    }
-  });
-
-  // Every 5 min during match window.
+  // Single 5-min tick. One isInMatchWindow() query decides everything, so we
+  // wake Neon at most once per 5 min while a match is near, and only once per
+  // hour otherwise. Outside the window we do NOTHING (no default-prediction
+  // poll, no sync) so Neon's compute can scale to zero → far fewer compute
+  // hours billed. Defaults only matter at deadline-1h, which is always inside
+  // the match window, so gating them here loses nothing.
   cron.schedule('*/5 * * * *', async () => {
     try {
-      if (await isInMatchWindow()) await syncLiveScores();
+      if (await isInMatchWindow()) {
+        await syncLiveScores();
+        await applyDefaultPredictions();
+      }
     } catch (err) {
       logger.error('Live score sync (active window) failed', { err });
     }
   });
 
-  // Every hour outside match window — offset to :02 to avoid racing with the :00 active tick.
+  // Hourly catch-up outside the window (in case a match got marked finished
+  // late, or ESPN posted a correction). Runs at :02 to avoid racing :00.
   cron.schedule('2 * * * *', async () => {
     try {
       if (!await isInMatchWindow()) await syncLiveScores();
@@ -74,7 +74,6 @@ export function startJobs() {
   });
 
   // Daily push notification: 16:00 Israel time = 13:00 UTC (Israel is UTC+3, no DST).
-  // Sends every subscribed user a personalised summary of today's matches.
   cron.schedule('0 13 * * *', async () => {
     try {
       await sendDailySummaryToAll();
