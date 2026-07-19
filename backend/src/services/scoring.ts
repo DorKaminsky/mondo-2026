@@ -184,6 +184,13 @@ export async function calculatePreTournamentScores(
   actualTopAssisterName: string,
   groupResults: Record<string, { first: string; second: string }>
 ): Promise<void> {
+  // Player names are free-text, so users type "Mbappe" for "Mbappé", add
+  // trailing spaces, vary case. Normalize accent + case + whitespace so a
+  // correct pick isn't rejected on a diacritic. Team/group picks come from a
+  // fixed dropdown and stay exact-match.
+  const normName = (s: string): string =>
+    (s ?? '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
   const { rows: predictions } = await query<Record<string, unknown>>(
     'SELECT * FROM pre_tournament_predictions WHERE is_final = true'
   );
@@ -197,13 +204,13 @@ export async function calculatePreTournamentScores(
 
       if (pred.winner_team === actualWinner) points += 16;
       if (pred.runner_up_team === actualRunnerUp) points += 8;
-      // Player picks now compare on name only (case-insensitive, trimmed) — team field has been dropped
+      // Player picks compare accent/case/space-insensitive (free-text field).
       const topScorerName = typeof pred.top_scorer_name === 'string' ? pred.top_scorer_name : '';
       const topAssisterName = typeof pred.top_assister_name === 'string' ? pred.top_assister_name : '';
-      if (topScorerName.trim().toLowerCase() === actualTopScorerName.trim().toLowerCase() && topScorerName) {
+      if (topScorerName && normName(topScorerName) === normName(actualTopScorerName)) {
         points += 12;
       }
-      if (topAssisterName.trim().toLowerCase() === actualTopAssisterName.trim().toLowerCase() && topAssisterName) {
+      if (topAssisterName && normName(topAssisterName) === normName(actualTopAssisterName)) {
         points += 12;
       }
 
