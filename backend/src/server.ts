@@ -8,7 +8,14 @@ async function main() {
   await pool.query('SELECT 1'); // verify DB connection
   logger.info('Database connected');
 
-  startJobs();
+  // Background polling can be turned off (e.g. after a tournament ends) to
+  // stop waking Neon's serverless compute. Set DISABLE_JOBS=true to keep the
+  // API fully functional while the crons stay dark. Re-enable by unsetting.
+  if (process.env.DISABLE_JOBS === 'true') {
+    logger.info('Background jobs DISABLED via DISABLE_JOBS env');
+  } else {
+    startJobs();
+  }
 
   app.listen(config.port, () => {
     logger.info(`Server running on port ${config.port} [${config.nodeEnv}]`);
